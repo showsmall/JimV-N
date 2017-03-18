@@ -34,7 +34,7 @@ pip install -r /opt/JimV-N/requirements.txt
 |:--|:--|:--|
 |**`redis_host`**|localhost|Redis 数据库地址|
 |**`redis_port`**|6379|Redis 数据库端口|
-|**`redis_password`**|\|Redis 数据库密码|
+|**`redis_password`**| |Redis 数据库密码|
 |redis_dbid|0|选择的 Redis 数据库|
 |debug|false|调试模式|
 |log_file_dir|logs|日志文件存放目录|
