@@ -8,7 +8,6 @@ import os
 import sys
 import json
 import getopt
-import jimit as ji
 import redis
 
 from jimvn_exception import PathNotExist
@@ -103,6 +102,7 @@ class Init(object):
 config = Init.load_config()
 logger = Init.init_logger()
 r = Init.redis_init_conn()
+assert isinstance(r, redis.StrictRedis)
 
 # 创建 JimV-N 向 JimV-C 推送事件消息的发射器
 emit = Emit()

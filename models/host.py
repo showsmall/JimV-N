@@ -7,10 +7,12 @@ import sys
 import time
 import libvirt
 import json
+
+from gluster import gfapi
+
 from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, emit
-from utils import Utils
 from guest import Guest
 
 
@@ -24,6 +26,8 @@ class Host(object):
     def __init__(self):
         self.conn = None
         self.dirty_path = None
+        self.glusterfs_volume = 'gv0'
+        self.gf = None
 
     def init_conn(self):
         self.conn = libvirt.open()
@@ -34,14 +38,13 @@ class Host(object):
     def clear_scene(self):
 
         if self.dirty_path is not None:
-            if os.path.exists(self.dirty_path):
-                _cmd = ' '.join(['rm', '-rf', self.dirty_path])
-                exit_status, output = Utils.shell_cmd(cmd=_cmd)
 
-                if exit_status != 0:
-                    log = u'清理现场失败: ' + str(output)
-                    logger.warn(msg=log)
-                    emit.warn(msg=log)
+            if self.gf is None:
+                self.gf = gfapi.Volume('127.0.0.1', self.glusterfs_volume)
+                self.gf.mount()
+
+            if self.gf.exists(self.dirty_path):
+                self.gf.rmtree(self.dirty_path)
 
             else:
                 log = u'清理现场失败: 不存在的路径 --> ' + self.dirty_path
@@ -111,13 +114,14 @@ class Host(object):
                     emit.emit(e.message)
                     continue
 
-                guest = Guest(uuid=msg['uuid'], template_path=msg['template_path'],
-                              system_image_path=msg['system_image_path'], data_disks=msg['data_disks'],
+                guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
+                              template_path=msg['template_path'], disks=msg['guest_disks'],
                               writes=msg['writes'], xml=msg['xml'])
-                guest.generate_base_dir()
+                guest.generate_guest_dir()
 
+                self.glusterfs_volume = guest.glusterfs_volume
                 # 虚拟机定义成功后，重置该变量为 None
-                self.dirty_path = guest.base_dir
+                self.dirty_path = guest.guest_dir
 
                 if not guest.generate_system_image():
                     continue

@@ -4,6 +4,7 @@
 
 import os
 import guestfs
+from gluster import gfapi
 
 from initialize import logger, emit
 from utils import Utils
@@ -17,48 +18,56 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 class Guest(object):
     def __init__(self, **kwargs):
-        self.uuid = kwargs.get('uuid', '')
+        self.uuid = kwargs.get('uuid', None)
+        self.name = kwargs.get('name', None)
         # 模板镜像路径
-        self.template_path = kwargs.get('template_path', '')
+        self.glusterfs_volume = kwargs.get('glusterfs_volume', 'gv0')
+        self.template_path = kwargs.get('template_path', None)
         # 不提供链接克隆(完整克隆，后期可以在模板目录，直接删除模板文件。从理论上讲，基于完整克隆的 Guest 读写速度、快照都应该快于链接克隆。)
         # self.clone = True
-        # Guest 系统镜像路径
-        self.system_image_path = kwargs.get('system_image_path', '')
-        self.base_dir = os.path.dirname(self.system_image_path)
-        # Guest 数据磁盘
-        self.data_disks = kwargs.get('data_disks', list())
-        self.writes = kwargs.get('writes', list())
+        # Guest 系统盘及数据磁盘
+        self.disks = kwargs.get('guest_disks', None)
+        self.writes = kwargs.get('writes', None)
         self.xml = kwargs.get('xml', None)
+        self.guest_dir = None
+        # Guest 系统镜像路径，不包含 glusterfs 卷标
+        self.system_image_path = None
         self.g = guestfs.GuestFS(python_return_dict=True)
+        self.gf = None
 
-    def generate_base_dir(self):
-        if not os.path.isdir(self.base_dir):
-            os.makedirs(self.base_dir, 0755)
+    def init_gfapi(self):
+        self.gf = gfapi.Volume('127.0.0.1', self.glusterfs_volume)
+        self.gf.mount()
+
+    def generate_guest_dir(self):
+        self.guest_dir = 'VMs' + self.name
+
+        if not self.gf.isdir(self.guest_dir):
+            self.gf.makedirs(self.guest_dir, 0755)
 
         return True
 
     def generate_system_image(self):
-        if not os.path.isfile(self.template_path):
+        if not self.gf.isfile(self.template_path):
             log = u'模板不存在: ' + self.template_path
             logger.error(msg=log)
             emit.error(msg=log)
             return False
 
-        cmd = ' '.join(['cp', self.template_path, self.system_image_path])
-        exit_status, output = Utils.shell_cmd(cmd=cmd)
-        if exit_status != 0:
-            log = u'命令执行退出异常: ' + str(output)
-            logger.error(msg=log)
-            emit.error(msg=log)
-            return False
+        self.system_image_path = self.guest_dir + '/' + self.disks[0]['label'] + '.' + self.disks[0]['format']
+
+        self.gf.copy(self.template_path, self.system_image_path)
 
         return True
 
     def generate_disk_image(self):
         # 最多3块数据盘
-        for data_disk in self.data_disks[:3]:
+        for disk in self.disks[1:4]:
 
-            cmd = ' '.join(['/usr/bin/qemu-img', 'create', '-f', 'qcow2', data_disk['path'], data_disk['size']])
+            disk_path = '/'.join(['gluster://127.0.0.1', self.glusterfs_volume, self.guest_dir,
+                                  disk['label'] + '.' + disk['format']])
+
+            cmd = ' '.join(['/usr/bin/qemu-img', 'create', '-f', 'qcow2', disk_path, disk['size']])
             exit_status, output = Utils.shell_cmd(cmd)
 
             if exit_status != 0:
@@ -70,7 +79,8 @@ class Guest(object):
         return True
 
     def init_config(self):
-        self.g.add_drive(filename=self.system_image_path)
+        self.g.add_drive(filename=self.glusterfs_volume + '/' + self.system_image_path, protocol='gluster',
+                         server='127.0.0.1')
         self.g.launch()
         self.g.mount(self.g.inspect_os(), '/')
 
