@@ -7,7 +7,6 @@ import sys
 import time
 import libvirt
 import json
-
 from gluster import gfapi
 
 from jimvn_exception import ConnFailed
@@ -26,7 +25,7 @@ class Host(object):
     def __init__(self):
         self.conn = None
         self.dirty_path = None
-        self.glusterfs_volume = 'gv0'
+        self.glusterfs_volume = None
         self.gf = None
 
     def init_conn(self):

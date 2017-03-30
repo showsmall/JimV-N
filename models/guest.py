@@ -20,6 +20,7 @@ class Guest(object):
     def __init__(self, **kwargs):
         self.uuid = kwargs.get('uuid', None)
         self.name = kwargs.get('name', None)
+        self.password = kwargs.get('password', None)
         # 模板镜像路径
         self.glusterfs_volume = kwargs.get('glusterfs_volume', 'gv0')
         self.template_path = kwargs.get('template_path', None)
@@ -86,6 +87,8 @@ class Guest(object):
 
         for item in self.writes:
             self.g.write(item['path'], item['content'])
+
+        self.g.command('echo "{user}:{password}" | chpasswd'.format(user='root', password=self.password))
 
         self.g.shutdown()
         self.g.close()
