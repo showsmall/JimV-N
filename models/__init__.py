@@ -2,10 +2,6 @@
 # -*- coding: utf-8 -*-
 
 
-from rules import (
-    Rules
-)
-
 from initialize import (
     Init
 )
@@ -30,5 +26,5 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 __all__ = [
-    'Rules', 'Init', 'Guest', 'Host', 'Utils', 'Emit'
+    'Init', 'Guest', 'Host', 'Utils', 'Emit'
 ]

@@ -28,9 +28,12 @@ if __name__ == '__main__':
         host = Host()
         host.init_conn()
         thread.start_new_thread(host.create_guest_engine, ())
+        Utils.thread_counter += 1
 
-        while not Utils.exit_flag:
+        while Utils.thread_counter > 0:
             time.sleep(1)
+
+        print 'Main say bye-bye!'
 
     except:
         logger.error(traceback.format_exc())

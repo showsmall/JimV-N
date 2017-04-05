@@ -16,6 +16,7 @@ __copyright__ = '(c) 2017 by James Iter.'
 class Utils(object):
 
     exit_flag = False
+    thread_counter = 0
 
     def __init__(self):
         pass
@@ -25,8 +26,7 @@ class Utils(object):
         try:
             exit_status, output = commands.getstatusoutput(cmd)
 
-            if exit_status != 0:
-                return exit_status, str(output)
+            return exit_status, str(output)
 
         except Exception as e:
             return -1, e.message

@@ -8,11 +8,13 @@ import time
 import libvirt
 import json
 from gluster import gfapi
+import jimit as ji
 
 from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, emit
 from guest import Guest
+from utils import Utils
 
 
 __author__ = 'James Iter'
@@ -71,9 +73,9 @@ class Host(object):
 
         return True
 
-    def start_guest(self, uuid):
+    def start_guest(self, uuidstr):
         try:
-            domain = self.conn.lookupByUUID(uuid=uuid)
+            domain = self.conn.lookupByUUIDString(uuidstr=uuidstr)
             # libvirtd 服务启动时，虚拟机不随之启动
             domain.setAutostart(0)
             domain.create()
@@ -90,6 +92,12 @@ class Host(object):
 
     def create_guest_engine(self):
         while True:
+            if Utils.exit_flag:
+                Utils.thread_counter -= 1
+                print 'Thread say bye-bye'
+                return
+
+            print 'Alive: ' + ji.JITime.gmt()
             try:
                 # 清理上个周期弄脏的现场
                 self.clear_scene()
@@ -116,6 +124,10 @@ class Host(object):
                 guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
                               template_path=msg['template_path'], disks=msg['guest_disks'],
                               writes=msg['writes'], xml=msg['xml'])
+                if Guest.gf is None:
+                    Guest.glusterfs_volume = msg['glusterfs_volume']
+                    Guest.init_gfapi()
+
                 guest.generate_guest_dir()
 
                 self.glusterfs_volume = guest.glusterfs_volume
@@ -137,7 +149,7 @@ class Host(object):
                 # 虚拟机定义成功后，重置该变量为 None，避免下个周期被清理现场
                 self.dirty_path = None
 
-                if not self.start_guest(uuid=guest.uuid):
+                if not self.start_guest(uuidstr=guest.uuid):
                     # 不清理现场，如需清理，让用户手动通过面板删除
                     continue
 
