@@ -2,6 +2,11 @@
 # -*- coding: utf-8 -*-
 
 
+from status import (
+    GuestStatus,
+    LogLevel
+)
+
 from initialize import (
     Init
 )
@@ -26,5 +31,6 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 __all__ = [
-    'Init', 'Guest', 'Host', 'Utils', 'Emit'
+    'Init', 'Guest', 'Host', 'Utils', 'Emit', 'GuestStatus', 'LogLevel'
 ]
+

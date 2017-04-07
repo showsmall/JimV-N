@@ -7,6 +7,11 @@
 > JimV 的计算节点。
 
 
+## 未来计划
+>
+* 参照 VMWare ESXi，做一个安装、 配置的 Shell 控制台
+
+
 ## 安装
 ### 克隆 JimV-N 项目
 ``` bash

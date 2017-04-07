@@ -6,6 +6,8 @@ import commands
 import jimit as ji
 import json
 
+from models import LogLevel
+
 
 __author__ = 'James Iter'
 __date__ = '2017/3/13'
@@ -17,9 +19,6 @@ class Utils(object):
 
     exit_flag = False
     thread_counter = 0
-
-    def __init__(self):
-        pass
 
     @staticmethod
     def shell_cmd(cmd):
@@ -39,24 +38,25 @@ class Utils(object):
 class Emit(object):
 
     def __init__(self):
-        self.host_event_report_queue = 'Q:HostEvent'
+        # 初始化时，host_event_report_queue 必须由具体实例来指定
+        self.host_event_report_queue = None
         self.hostname = ji.Common.get_hostname()
         self.r = None
 
-    def emit(self, _type='', message=''):
+    def emit(self, _type=None, message=''):
         msg = json.dumps({'type': _type, 'timestamp': ji.Common.ts(), 'host': self.hostname, 'message': message},
                          ensure_ascii=False)
         return self.r.rpush(self.host_event_report_queue, msg)
 
     def info(self, msg):
-        return self.emit(_type='info', message=msg)
+        return self.emit(_type=LogLevel.info.value, message=msg)
 
     def warn(self, msg):
-        return self.emit(_type='warn', message=msg)
+        return self.emit(_type=LogLevel.warn.value, message=msg)
 
     def error(self, msg):
-        return self.emit(_type='error', message=msg)
+        return self.emit(_type=LogLevel.error.value, message=msg)
 
     def critical(self, msg):
-        return self.emit(_type='critical', message=msg)
+        return self.emit(_type=LogLevel.critical.value, message=msg)
 

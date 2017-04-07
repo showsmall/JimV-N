@@ -97,7 +97,6 @@ class Host(object):
                 print 'Thread say bye-bye'
                 return
 
-            print 'Alive: ' + ji.JITime.gmt()
             try:
                 # 清理上个周期弄脏的现场
                 self.clear_scene()
@@ -105,6 +104,7 @@ class Host(object):
                 load_avg = os.getloadavg()[1]
                 # sleep 加 1，避免 load_avg 为 0 时，循环过度
                 time.sleep(load_avg * 10 + 1)
+                print ji.JITime.gmt(ts=time.time())
 
                 # 大于 0.6 的系统将不再被分配创建虚拟机
                 if load_avg > 0.6:
