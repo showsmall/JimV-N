@@ -3,6 +3,7 @@
 
 
 import guestfs
+import libvirt
 from gluster import gfapi
 
 from initialize import logger, emit
@@ -51,7 +52,7 @@ class Guest(object):
 
     def generate_system_image(self):
         if not self.gf.isfile(self.template_path):
-            log = u'模板不存在: ' + self.template_path
+            log = u' '.join([u'域', self.name, u'所依赖的模板', self.template_path, u'不存在.'])
             logger.error(msg=log)
             emit.error(msg=log)
             return False
@@ -73,7 +74,7 @@ class Guest(object):
             exit_status, output = Utils.shell_cmd(cmd)
 
             if exit_status != 0:
-                log = u'命令执行退出异常: ' + str(output)
+                log = u' '.join([u'域', self.name, u'创建磁盘时，命令执行退出异常：', str(output)])
                 logger.error(msg=log)
                 emit.error(msg=log)
                 return False
@@ -93,4 +94,38 @@ class Guest(object):
 
         self.g.shutdown()
         self.g.close()
+
+    def define_by_xml(self, conn=None):
+        try:
+            if conn.defineXML(xml=self.xml):
+                log = u' '.join([u'域', self.name, u'定义成功.'])
+                logger.info(msg=log)
+                emit.info(msg=log)
+            else:
+                log = u' '.join([u'域', self.name, u'定义时未预期返回.'])
+                logger.info(msg=log)
+                emit.info(msg=log)
+                return False
+
+        except libvirt.libvirtError as e:
+            logger.error(e.message)
+            emit.error(e.message)
+            return False
+
+        return True
+
+    def start_by_uuid(self, conn=None):
+        try:
+            domain = conn.lookupByUUIDString(uuidstr=self.uuid)
+            domain.create()
+            log = u' '.join([u'域', self.name, u'启动成功.'])
+            logger.info(msg=log)
+            emit.info(msg=log)
+
+        except libvirt.libvirtError as e:
+            logger.error(e.message)
+            emit.error(e.message)
+            return False
+
+        return True
 

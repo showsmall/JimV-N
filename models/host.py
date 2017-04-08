@@ -7,7 +7,6 @@ import sys
 import time
 import libvirt
 import json
-from gluster import gfapi
 import jimit as ji
 
 from jimvn_exception import ConnFailed
@@ -26,9 +25,8 @@ __copyright__ = '(c) 2017 by James Iter.'
 class Host(object):
     def __init__(self):
         self.conn = None
-        self.dirty_path = None
-        self.glusterfs_volume = None
-        self.gf = None
+        self.dirty_scene = False
+        self.guest = None
 
     def init_conn(self):
         self.conn = libvirt.open()
@@ -38,57 +36,17 @@ class Host(object):
 
     def clear_scene(self):
 
-        if self.dirty_path is not None:
+        if self.dirty_scene:
 
-            if self.gf is None:
-                self.gf = gfapi.Volume('127.0.0.1', self.glusterfs_volume)
-                self.gf.mount()
-
-            if self.gf.exists(self.dirty_path):
-                self.gf.rmtree(self.dirty_path)
+            if self.guest.gf.exists(self.guest.guest_dir):
+                self.guest.gf.rmtree(self.guest.guest_dir)
 
             else:
-                log = u'清理现场失败: 不存在的路径 --> ' + self.dirty_path
+                log = u'清理现场失败: 不存在的路径 --> ' + self.guest.guest_dir
                 logger.warn(msg=log)
                 emit.warn(msg=log)
 
-            self.dirty_path = None
-
-    def define_guest_by_xml(self, xml):
-        try:
-            if self.conn.defineXML(xml=xml):
-                log = u'域定义成功.'
-                logger.info(msg=log)
-                emit.info(msg=log)
-            else:
-                log = u'域定义时未预期返回.'
-                logger.info(msg=log)
-                emit.info(msg=log)
-                return False
-
-        except libvirt.libvirtError as e:
-            logger.error(e.message)
-            emit.error(e.message)
-            return False
-
-        return True
-
-    def start_guest(self, uuidstr):
-        try:
-            domain = self.conn.lookupByUUIDString(uuidstr=uuidstr)
-            # libvirtd 服务启动时，虚拟机不随之启动
-            domain.setAutostart(0)
-            domain.create()
-            log = u'域成功启动.'
-            logger.info(msg=log)
-            emit.info(msg=log)
-
-        except libvirt.libvirtError as e:
-            logger.error(e.message)
-            emit.error(e.message)
-            return False
-
-        return True
+            self.dirty_scene = False
 
     def create_guest_engine(self):
         while True:
@@ -121,35 +79,34 @@ class Host(object):
                     emit.emit(e.message)
                     continue
 
-                guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
-                              template_path=msg['template_path'], disks=msg['guest_disks'],
-                              writes=msg['writes'], xml=msg['xml'])
+                self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
+                                   template_path=msg['template_path'], disks=msg['guest_disks'],
+                                   writes=msg['writes'], xml=msg['xml'])
                 if Guest.gf is None:
                     Guest.glusterfs_volume = msg['glusterfs_volume']
                     Guest.init_gfapi()
 
-                guest.generate_guest_dir()
+                self.guest.generate_guest_dir()
 
-                self.glusterfs_volume = guest.glusterfs_volume
-                # 虚拟机定义成功后，重置该变量为 None
-                self.dirty_path = guest.guest_dir
+                # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
+                self.dirty_scene = True
 
-                if not guest.generate_system_image():
+                if not self.guest.generate_system_image():
                     continue
 
                 # 由该线程最顶层的异常捕获机制，处理其抛出的异常
-                guest.init_config()
+                self.guest.init_config()
 
-                if not guest.generate_disk_image():
+                if not self.guest.generate_disk_image():
                     continue
 
-                if not self.define_guest_by_xml(xml=guest.xml):
+                if not self.guest.define_by_xml(conn=self.conn):
                     continue
 
-                # 虚拟机定义成功后，重置该变量为 None，避免下个周期被清理现场
-                self.dirty_path = None
+                # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
+                self.dirty_scene = False
 
-                if not self.start_guest(uuidstr=guest.uuid):
+                if not self.guest.start_by_uuid(conn=self.conn):
                     # 不清理现场，如需清理，让用户手动通过面板删除
                     continue
 
