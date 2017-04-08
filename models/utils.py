@@ -48,6 +48,9 @@ class Emit(object):
                          ensure_ascii=False)
         return self.r.rpush(self.host_event_report_queue, msg)
 
+    def debug(self, msg):
+        return self.emit(_type=LogLevel.debug.value, message=msg)
+
     def info(self, msg):
         return self.emit(_type=LogLevel.info.value, message=msg)
 
