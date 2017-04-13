@@ -8,6 +8,7 @@ from gluster import gfapi
 
 from initialize import logger, emit
 from utils import Utils
+from jimvn_exception import CommandExecFailed
 
 
 __author__ = 'James Iter'
@@ -63,21 +64,35 @@ class Guest(object):
 
         return True
 
-    def generate_disk_image(self):
-        # 最多3块数据盘
-        for disk in self.disks[1:4]:
+    @staticmethod
+    def make_qemu_image_by_glusterfs(glusterfs_volume, image_path, size):
+        image_path = '/'.join(['gluster://127.0.0.1', glusterfs_volume, image_path])
 
-            disk_path = '/'.join(['gluster://127.0.0.1', self.glusterfs_volume, self.guest_dir,
-                                  disk['label'] + '.' + disk['format']])
+        cmd = ' '.join(['/usr/bin/qemu-img', 'create', '-f', 'qcow2', image_path, size.__str__() + 'G'])
+        exit_status, output = Utils.shell_cmd(cmd)
 
-            cmd = ' '.join(['/usr/bin/qemu-img', 'create', '-f', 'qcow2', disk_path, disk['size'].__str__() + 'G'])
-            exit_status, output = Utils.shell_cmd(cmd)
+        if exit_status != 0:
+            log = u' '.join([u'域', image_path, u'创建磁盘时，命令执行退出异常：', str(output)])
+            logger.error(msg=log)
+            raise CommandExecFailed(log)
 
-            if exit_status != 0:
-                log = u' '.join([u'域', self.name, u'创建磁盘时，命令执行退出异常：', str(output)])
-                logger.error(msg=log)
-                emit.error(msg=log)
-                return False
+        return True
+
+    def generate_guest_disk_image(self):
+        try:
+            for disk in self.disks[1:4]:
+
+                image_path = '/'.join([self.guest_dir, disk['label'] + '.' + disk['format']])
+
+                self.make_qemu_image_by_glusterfs(image_path=image_path, glusterfs_volume=self.glusterfs_volume,
+                                                  size=disk['size'])
+
+        except CommandExecFailed as e:
+            log = u' '.join([u'域', self.name, u'创建磁盘时，命令执行退出异常：', e.message])
+            logger.error(msg=log)
+            emit.error(msg=log)
+
+            return False
 
         return True
 
@@ -128,4 +143,5 @@ class Guest(object):
             return False
 
         return True
+
 

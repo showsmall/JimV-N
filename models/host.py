@@ -104,7 +104,7 @@ class Host(object):
                 # 由该线程最顶层的异常捕获机制，处理其抛出的异常
                 self.guest.init_config()
 
-                if not self.guest.generate_disk_image():
+                if not self.guest.generate_guest_disk_image():
                     continue
 
                 if not self.guest.define_by_xml(conn=self.conn):
@@ -166,24 +166,31 @@ class Host(object):
 
                 if msg['action'] == 'reboot':
                     self.guest.reboot()
+
                 elif msg['action'] == 'force_reboot':
                     self.guest.destroy()
                     self.guest.create()
+
                 elif msg['action'] == 'shutdown':
                     self.guest.shutdown()
+
                 elif msg['action'] == 'force_shutdown':
                     self.guest.destroy()
+
                 elif msg['action'] == 'boot':
                     self.guest.create()
+
                 elif msg['action'] == 'suspend':
                     self.guest.suspend()
+
                 elif msg['action'] == 'resume':
                     self.guest.resume()
+
                 elif msg['action'] == 'delete':
-                    # TODO: 优化代码结构
                     self.guest.destroy()
                     self.guest.undefine()
                     root = ET.fromstring(self.guest.XMLDesc())
+                    # 签出系统镜像路径
                     path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
                     if Guest.gf is None:
                         Guest.glusterfs_volume = path_list[0]
@@ -191,19 +198,82 @@ class Host(object):
 
                     if Guest.gf.exists('/'.join(path_list[1:3])):
                         Guest.gf.rmtree('/'.join(path_list[1:3]))
+
                 elif msg['action'] == 'disk-resize':
-                    pass
+
+                    if 'disk' not in msg or not all([key in msg['disk'] for key in ['device_node', 'size']]):
+                        log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
+                        logger.error(log)
+                        emit.emit(log)
+                        continue
+
+                    self.guest.blockResize(disk=msg['disk'], size=msg['size'])
+
                 elif msg['action'] == 'attach-disk':
-                    pass
+
+                    if all([key in msg for key in ['disk', 'xml']]) or \
+                            not all([key in msg['disk'] for key in ['label', 'size', 'format']]):
+                        log = u'添加磁盘缺少 xml、disk 或 disk["label|size|format"] 参数'
+                        logger.error(log)
+                        emit.emit(log)
+                        continue
+
+                    root = ET.fromstring(self.guest.XMLDesc())
+                    # 签出系统镜像路径
+                    path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
+                    glusterfs_volume = path_list[0]
+                    # 新添加的磁盘镜像，在 glusterfs 目标卷上的存放路径
+                    image_path = '/'.join(['/'.join([path_list[1:3]]),
+                                           msg['disk']['label'] + '.' + msg['disk']['format']])
+                    size = msg['disk']['size']
+
+                    Guest.make_qemu_image_by_glusterfs(glusterfs_volume=glusterfs_volume, image_path=image_path,
+                                                       size=size)
+
+                    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+                    if self.guest.isActive():
+                        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+
+                    self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
+
                 elif msg['action'] == 'detach-disk':
-                    pass
+
+                    if 'xml' not in msg:
+                        log = u'分离磁盘缺少 xml 参数'
+                        logger.error(log)
+                        emit.emit(log)
+                        continue
+
+                    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+                    if self.guest.isActive():
+                        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+
+                    self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
+
                 elif msg['action'] == 'migrate':
-                    pass
+
+                    # duri like qemu+ssh://destination_host/system
+                    if 'duri' not in msg:
+                        log = u'迁移操作缺少 duri 参数'
+                        logger.error(log)
+                        emit.emit(log)
+                        continue
+
+                    flags = libvirt.VIR_MIGRATE_PEER2PEER | \
+                        libvirt.VIR_MIGRATE_TUNNELLED | \
+                        libvirt.VIR_MIGRATE_PERSIST_DEST | \
+                        libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | \
+                        libvirt.VIR_MIGRATE_COMPRESSED
+
+                    if self.guest.isActive():
+                        flags |= libvirt.VIR_MIGRATE_LIVE
+
+                    self.guest.migrateToURI(duri=msg['duri'], flags=flags)
+
                 else:
                     log = u'未支持的 action：' + msg['action']
                     logger.error(log)
                     emit.emit(log)
-                    pass
 
             except Exception as e:
                 logger.error(e.message)

@@ -29,3 +29,8 @@ class AlreadyUsed(JimVNException):
 
 class DomainNotExist(JimVNException):
     pass
+
+
+class CommandExecFailed(JimVNException):
+    pass
+
