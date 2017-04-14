@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-from enum import Enum, IntEnum
+from enum import IntEnum
 
 
 __author__ = 'James Iter'
@@ -11,7 +11,12 @@ __contact__ = 'james.iter.cn@gmail.com'
 __copyright__ = '(c) 2017 by James Iter.'
 
 
-class GuestStatus(IntEnum):
+class EmitKind(IntEnum):
+    log = 0
+    event = 1
+
+
+class GuestEvent(IntEnum):
     shutdown = 0
     booting = 1
     running = 2

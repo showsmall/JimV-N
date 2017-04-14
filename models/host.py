@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 
 from jimvn_exception import ConnFailed
 
-from initialize import config, logger, r, emit
+from initialize import config, logger, r, log_emit, event_emit
 from guest import Guest
 from utils import Utils
 
@@ -51,7 +51,7 @@ class Host(object):
             else:
                 log = u'清理现场失败: 不存在的路径 --> ' + self.guest.guest_dir
                 logger.warn(msg=log)
-                emit.warn(msg=log)
+                log_emit.warn(msg=log)
 
             self.dirty_scene = False
 
@@ -69,7 +69,8 @@ class Host(object):
                 load_avg = os.getloadavg()[1]
                 # sleep 加 1，避免 load_avg 为 0 时，循环过度
                 time.sleep(load_avg * 10 + 1)
-                print 'create_guest_engine alive: ' + ji.JITime.gmt(ts=time.time())
+                if config['debug']:
+                    print 'create_guest_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
                 # 大于 0.6 的系统将不再被分配创建虚拟机
                 if load_avg > 0.6:
@@ -83,7 +84,7 @@ class Host(object):
                     msg = json.loads(msg)
                 except ValueError as e:
                     logger.error(e.message)
-                    emit.emit(e.message)
+                    log_emit.error(e.message)
                     continue
 
                 self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
@@ -119,9 +120,9 @@ class Host(object):
 
             except Exception as e:
                 logger.error(e.message)
-                emit.error(e.message)
+                log_emit.error(e.message)
 
-    # TODO: 解决多线程访问 self.guest 问题
+    # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_operate_engine(self):
 
         ps = r.pubsub(ignore_subscribe_messages=False)
@@ -135,7 +136,8 @@ class Host(object):
 
             try:
                 msg = ps.get_message(timeout=1)
-                print 'guest_operate_engine alive: ' + ji.JITime.gmt(ts=time.time())
+                if config['debug']:
+                    print 'guest_operate_engine alive: ' + ji.JITime.gmt(ts=time.time())
                 if msg is None:
                     continue
 
@@ -143,7 +145,7 @@ class Host(object):
                     msg = json.loads(msg)
                 except ValueError as e:
                     logger.error(e.message)
-                    emit.emit(e.message)
+                    log_emit.error(e.message)
                     continue
 
                 # 下列语句繁琐写法如 <code>if 'action' not in msg or 'uuid' not in msg:</code>
@@ -157,7 +159,7 @@ class Host(object):
                     if config['debug']:
                         log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
                         logger.debug(log)
-                        emit.debug(log)
+                        log_emit.debug(log)
 
                     continue
 
@@ -204,7 +206,7 @@ class Host(object):
                     if 'disk' not in msg or not all([key in msg['disk'] for key in ['device_node', 'size']]):
                         log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
                         logger.error(log)
-                        emit.emit(log)
+                        log_emit.error(log)
                         continue
 
                     self.guest.blockResize(disk=msg['disk'], size=msg['size'])
@@ -215,7 +217,7 @@ class Host(object):
                             not all([key in msg['disk'] for key in ['label', 'size', 'format']]):
                         log = u'添加磁盘缺少 xml、disk 或 disk["label|size|format"] 参数'
                         logger.error(log)
-                        emit.emit(log)
+                        log_emit.error(log)
                         continue
 
                     root = ET.fromstring(self.guest.XMLDesc())
@@ -241,7 +243,7 @@ class Host(object):
                     if 'xml' not in msg:
                         log = u'分离磁盘缺少 xml 参数'
                         logger.error(log)
-                        emit.emit(log)
+                        log_emit.error(log)
                         continue
 
                     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
@@ -256,7 +258,7 @@ class Host(object):
                     if 'duri' not in msg:
                         log = u'迁移操作缺少 duri 参数'
                         logger.error(log)
-                        emit.emit(log)
+                        log_emit.error(log)
                         continue
 
                     flags = libvirt.VIR_MIGRATE_PEER2PEER | \
@@ -273,9 +275,9 @@ class Host(object):
                 else:
                     log = u'未支持的 action：' + msg['action']
                     logger.error(log)
-                    emit.emit(log)
+                    log_emit.error(log)
 
             except Exception as e:
                 logger.error(e.message)
-                emit.error(e.message)
+                log_emit.error(e.message)
 

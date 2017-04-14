@@ -3,7 +3,8 @@
 
 
 from status import (
-    GuestStatus,
+    EmitKind,
+    GuestEvent,
     LogLevel
 )
 
@@ -31,6 +32,6 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 __all__ = [
-    'Init', 'Guest', 'Host', 'Utils', 'Emit', 'GuestStatus', 'LogLevel'
+    'Init', 'Guest', 'Host', 'Utils', 'Emit', 'EmitKind', 'GuestEvent', 'LogLevel'
 ]
 

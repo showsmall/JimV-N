@@ -6,7 +6,7 @@ import guestfs
 import libvirt
 from gluster import gfapi
 
-from initialize import logger, emit
+from initialize import logger, log_emit
 from utils import Utils
 from jimvn_exception import CommandExecFailed
 
@@ -55,7 +55,7 @@ class Guest(object):
         if not self.gf.isfile(self.template_path):
             log = u' '.join([u'域', self.name, u'所依赖的模板', self.template_path, u'不存在.'])
             logger.error(msg=log)
-            emit.error(msg=log)
+            log_emit.error(msg=log)
             return False
 
         self.system_image_path = self.guest_dir + '/' + self.disks[0]['label'] + '.' + self.disks[0]['format']
@@ -90,7 +90,7 @@ class Guest(object):
         except CommandExecFailed as e:
             log = u' '.join([u'域', self.name, u'创建磁盘时，命令执行退出异常：', e.message])
             logger.error(msg=log)
-            emit.error(msg=log)
+            log_emit.error(msg=log)
 
             return False
 
@@ -115,16 +115,16 @@ class Guest(object):
             if conn.defineXML(xml=self.xml):
                 log = u' '.join([u'域', self.name, u'定义成功.'])
                 logger.info(msg=log)
-                emit.info(msg=log)
+                log_emit.info(msg=log)
             else:
                 log = u' '.join([u'域', self.name, u'定义时未预期返回.'])
                 logger.info(msg=log)
-                emit.info(msg=log)
+                log_emit.info(msg=log)
                 return False
 
         except libvirt.libvirtError as e:
             logger.error(e.message)
-            emit.error(e.message)
+            log_emit.error(e.message)
             return False
 
         return True
@@ -135,11 +135,11 @@ class Guest(object):
             domain.create()
             log = u' '.join([u'域', self.name, u'启动成功.'])
             logger.info(msg=log)
-            emit.info(msg=log)
+            log_emit.info(msg=log)
 
         except libvirt.libvirtError as e:
             logger.error(e.message)
-            emit.error(e.message)
+            log_emit.error(e.message)
             return False
 
         return True

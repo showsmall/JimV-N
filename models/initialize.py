@@ -11,7 +11,7 @@ import getopt
 import redis
 
 from jimvn_exception import PathNotExist
-from utils import Emit
+from utils import LogEmit, EventEmit
 
 
 __author__ = 'James Iter'
@@ -105,7 +105,11 @@ r = Init.redis_init_conn()
 assert isinstance(r, redis.StrictRedis)
 
 # 创建 JimV-N 向 JimV-C 推送事件消息的发射器
-emit = Emit()
-emit.host_event_report_queue = config.get('host_event_report_queue', 'Q:HostEvent')
-emit.r = r
+log_emit = LogEmit()
+log_emit.host_event_report_queue = config.get('host_event_report_queue', 'Q:HostEvent')
+log_emit.r = r
+
+event_emit = EventEmit()
+event_emit.host_event_report_queue = config.get('host_event_report_queue', 'Q:HostEvent')
+event_emit.r = r
 
