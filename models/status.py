@@ -16,13 +16,18 @@ class EmitKind(IntEnum):
     event = 1
 
 
-class GuestEvent(IntEnum):
-    shutdown = 0
-    booting = 1
-    running = 2
-    rebooting = 3
-    suspend = 4
-    resuming = 5
+class GuestState(IntEnum):
+    # 参考地址：
+    # http://libvirt.org/docs/libvirt-appdev-guide-python/en-US/html/libvirt_application_development_guide_using_python-Guest_Domains-Information-State.html
+
+    no_state = 0
+    running = 1
+    blocked = 2
+    paused = 3
+    shutdown = 4
+    shutoff = 5
+    crashed = 6
+    pm_suspended = 7
 
 
 class LogLevel(IntEnum):

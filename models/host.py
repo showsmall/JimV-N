@@ -281,3 +281,63 @@ class Host(object):
                 logger.error(e.message)
                 log_emit.error(e.message)
 
+    # 使用时，创建独立的实例来避开 多线程 的问题
+    def guest_state_report_engine(self):
+
+        guests_last_state = dict()
+
+        while True:
+            if Utils.exit_flag:
+                Utils.thread_counter -= 1
+                print 'Thread guest_state_report_engine say bye-bye'
+                return
+
+            try:
+                if config['debug']:
+                    print 'guest_state_report_engine alive: ' + ji.JITime.gmt(ts=time.time())
+
+                self.refresh_guest_mapping()
+
+                time.sleep(2)
+
+                for uuid, domain in self.guest_mapping_by_uuid.items():
+                    # state 参考链接：
+                    # http://libvirt.org/docs/libvirt-appdev-guide-python/en-US/html/libvirt_application_development_guide_using_python-Guest_Domains-Information-State.html
+                    # http://stackoverflow.com/questions/4986076/alternative-to-virsh-libvirt
+
+                    state, maxmem, mem, ncpu, cputime = domain.info()
+
+                    # 与 Guest 最后一次的状态做比较后，有差异的上报状态，没有差异的不做任何处理。
+                    if uuid in guests_last_state and guests_last_state[uuid] == state:
+                        continue
+
+                    guests_last_state[uuid] = state
+
+                    if state == libvirt.VIR_DOMAIN_RUNNING:
+                        event_emit.running(uuid=uuid)
+
+                    elif state == libvirt.VIR_DOMAIN_BLOCKED:
+                        event_emit.blocked(uuid=uuid)
+
+                    elif state == libvirt.VIR_DOMAIN_PAUSED:
+                        event_emit.paused(uuid=uuid)
+
+                    elif state == libvirt.VIR_DOMAIN_SHUTDOWN:
+                        event_emit.shutdown(uuid=uuid)
+
+                    elif state == libvirt.VIR_DOMAIN_SHUTOFF:
+                        event_emit.shutoff(uuid=uuid)
+
+                    elif state == libvirt.VIR_DOMAIN_CRASHED:
+                        event_emit.crashed(uuid=uuid)
+
+                    elif state == libvirt.VIR_DOMAIN_PMSUSPENDED:
+                        event_emit.pm_suspended(uuid=uuid)
+
+                    else:
+                        event_emit.no_state(uuid=uuid)
+
+            except Exception as e:
+                logger.error(e.message)
+                log_emit.error(e.message)
+

@@ -6,7 +6,7 @@ import commands
 import jimit as ji
 import json
 
-from models import LogLevel, EmitKind, GuestEvent
+from models import LogLevel, EmitKind, GuestState
 
 
 __author__ = 'James Iter'
@@ -85,21 +85,28 @@ class EventEmit(Emit):
     def emit2(self, _type=None, uuid=None):
         return self.emit(_kind=EmitKind.event.value, _type=_type, message={'uuid': uuid})
 
-    def shutdown(self, uuid):
-        return self.emit2(_type=GuestEvent.shutdown.value, uuid=uuid)
-
-    def booting(self, uuid):
-        return self.emit2(_type=GuestEvent.booting.value, uuid=uuid)
+    def no_state(self, uuid):
+        return self.emit2(_type=GuestState.no_state.value, uuid=uuid)
 
     def running(self, uuid):
-        return self.emit2(_type=GuestEvent.running.value, uuid=uuid)
+        return self.emit2(_type=GuestState.running.value, uuid=uuid)
 
-    def rebooting(self, uuid):
-        return self.emit2(_type=GuestEvent.rebooting.value, uuid=uuid)
+    def blocked(self, uuid):
+        return self.emit2(_type=GuestState.blocked.value, uuid=uuid)
 
-    def suspend(self, uuid):
-        return self.emit2(_type=GuestEvent.suspend.value, uuid=uuid)
+    def paused(self, uuid):
+        return self.emit2(_type=GuestState.paused.value, uuid=uuid)
 
-    def resuming(self, uuid):
-        return self.emit2(_type=GuestEvent.resuming.value, uuid=uuid)
+    def shutdown(self, uuid):
+        return self.emit2(_type=GuestState.shutdown.value, uuid=uuid)
+
+    def shutoff(self, uuid):
+        return self.emit2(_type=GuestState.shutoff.value, uuid=uuid)
+
+    def crashed(self, uuid):
+        return self.emit2(_type=GuestState.crashed.value, uuid=uuid)
+
+    def pm_suspended(self, uuid):
+        return self.emit2(_type=GuestState.pm_suspended.value, uuid=uuid)
+
 

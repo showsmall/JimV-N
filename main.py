@@ -35,6 +35,11 @@ if __name__ == '__main__':
         thread.start_new_thread(host_use_for_guest_operate_engine.guest_operate_engine, ())
         Utils.thread_counter += 1
 
+        host_use_for_guest_state_report_engine = Host()
+        host_use_for_guest_state_report_engine.init_conn()
+        thread.start_new_thread(host_use_for_guest_state_report_engine.guest_state_report_engine, ())
+        Utils.thread_counter += 1
+
         while Utils.thread_counter > 0:
             time.sleep(1)
 
