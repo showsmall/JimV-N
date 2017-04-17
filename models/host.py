@@ -313,29 +313,43 @@ class Host(object):
 
                     guests_last_state[uuid] = state
 
+                    log = u' '.join([u'域', domain.name(), u', UUID', uuid, u'的状态改变为'])
+
                     if state == libvirt.VIR_DOMAIN_RUNNING:
+                        log += u' Running。'
                         event_emit.running(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_BLOCKED:
+                        log += u' Blocked。'
                         event_emit.blocked(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_PAUSED:
+                        log += u' Paused。'
                         event_emit.paused(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_SHUTDOWN:
+                        log += u' Shutdown。'
                         event_emit.shutdown(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_SHUTOFF:
+                        log += u' Shutoff。'
                         event_emit.shutoff(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_CRASHED:
+                        log += u' Crashed。'
                         event_emit.crashed(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_PMSUSPENDED:
+                        log += u' PM_Suspended。'
                         event_emit.pm_suspended(uuid=uuid)
 
                     else:
+                        log += u' NO_State。'
+
                         event_emit.no_state(uuid=uuid)
+
+                    logger.info(log)
+                    log_emit.info(log)
 
             except Exception as e:
                 logger.error(e.message)
