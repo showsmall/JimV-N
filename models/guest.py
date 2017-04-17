@@ -53,7 +53,7 @@ class Guest(object):
 
     def generate_system_image(self):
         if not self.gf.isfile(self.template_path):
-            log = u' '.join([u'域', self.name, u'所依赖的模板', self.template_path, u'不存在.'])
+            log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'所依赖的模板', self.template_path, u'不存在.'])
             logger.error(msg=log)
             log_emit.error(msg=log)
             return False
@@ -72,7 +72,7 @@ class Guest(object):
         exit_status, output = Utils.shell_cmd(cmd)
 
         if exit_status != 0:
-            log = u' '.join([u'域', image_path, u'创建磁盘时，命令执行退出异常：', str(output)])
+            log = u' '.join([u'路径', image_path, u'创建磁盘时，命令执行退出异常：', str(output)])
             logger.error(msg=log)
             raise CommandExecFailed(log)
 
@@ -88,7 +88,7 @@ class Guest(object):
                                                   size=disk['size'])
 
         except CommandExecFailed as e:
-            log = u' '.join([u'域', self.name, u'创建磁盘时，命令执行退出异常：', e.message])
+            log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'创建磁盘时，命令执行退出异常：', e.message])
             logger.error(msg=log)
             log_emit.error(msg=log)
 
@@ -113,11 +113,11 @@ class Guest(object):
     def define_by_xml(self, conn=None):
         try:
             if conn.defineXML(xml=self.xml):
-                log = u' '.join([u'域', self.name, u'定义成功.'])
+                log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'定义成功.'])
                 logger.info(msg=log)
                 log_emit.info(msg=log)
             else:
-                log = u' '.join([u'域', self.name, u'定义时未预期返回.'])
+                log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'定义时未预期返回.'])
                 logger.info(msg=log)
                 log_emit.info(msg=log)
                 return False
@@ -133,7 +133,7 @@ class Guest(object):
         try:
             domain = conn.lookupByUUIDString(uuidstr=self.uuid)
             domain.create()
-            log = u' '.join([u'域', self.name, u'启动成功.'])
+            log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'启动成功.'])
             logger.info(msg=log)
             log_emit.info(msg=log)
 
