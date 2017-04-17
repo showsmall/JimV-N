@@ -138,11 +138,11 @@ class Host(object):
                 msg = ps.get_message(timeout=1)
                 if config['debug']:
                     print 'guest_operate_engine alive: ' + ji.JITime.gmt(ts=time.time())
-                if msg is None:
+                if msg is None or 'data' not in msg or not isinstance(msg['data'], basestring):
                     continue
 
                 try:
-                    msg = json.loads(msg)
+                    msg = json.loads(msg['data'])
                 except ValueError as e:
                     logger.error(e.message)
                     log_emit.error(e.message)
