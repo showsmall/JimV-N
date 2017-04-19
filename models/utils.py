@@ -39,7 +39,7 @@ class Emit(object):
 
     def __init__(self):
         # 初始化时，host_event_report_queue 必须由具体实例来指定
-        self.host_event_report_queue = None
+        self.upstream_queue = None
         self.hostname = ji.Common.get_hostname()
         self.r = None
 
@@ -52,7 +52,7 @@ class Emit(object):
 
         msg = json.dumps({'kind': _kind, 'type': _type, 'timestamp': ji.Common.ts(), 'host': self.hostname,
                           'message': message}, ensure_ascii=False)
-        return self.r.rpush(self.host_event_report_queue, msg)
+        return self.r.rpush(self.upstream_queue, msg)
 
 
 class LogEmit(Emit):

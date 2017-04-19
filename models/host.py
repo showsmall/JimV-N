@@ -76,7 +76,7 @@ class Host(object):
                 if load_avg > 0.6:
                     continue
 
-                msg = r.rpop(config['vm_create_queue'])
+                msg = r.rpop(config['downstream_queue'])
                 if msg is None:
                     continue
 
@@ -87,36 +87,45 @@ class Host(object):
                     log_emit.error(e.message)
                     continue
 
-                self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
-                                   template_path=msg['template_path'], disks=msg['guest_disks'],
-                                   writes=msg['writes'], xml=msg['xml'])
-                if Guest.gf is None:
-                    Guest.glusterfs_volume = msg['glusterfs_volume']
-                    Guest.init_gfapi()
+                if msg['action'] == 'create_vm':
 
-                self.guest.generate_guest_dir()
+                    self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
+                                       template_path=msg['template_path'], disks=msg['guest_disks'],
+                                       writes=msg['writes'], xml=msg['xml'])
+                    if Guest.gf is None:
+                        Guest.glusterfs_volume = msg['glusterfs_volume']
+                        Guest.init_gfapi()
 
-                # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
-                self.dirty_scene = True
+                    self.guest.generate_guest_dir()
 
-                if not self.guest.generate_system_image():
-                    continue
+                    # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
+                    self.dirty_scene = True
 
-                # 由该线程最顶层的异常捕获机制，处理其抛出的异常
-                self.guest.init_config()
+                    if not self.guest.generate_system_image():
+                        continue
 
-                if not self.guest.generate_guest_disk_image():
-                    continue
+                    # 由该线程最顶层的异常捕获机制，处理其抛出的异常
+                    self.guest.init_config()
 
-                if not self.guest.define_by_xml(conn=self.conn):
-                    continue
+                    if not self.guest.generate_guest_disk_image():
+                        continue
 
-                # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
-                self.dirty_scene = False
+                    if not self.guest.define_by_xml(conn=self.conn):
+                        continue
 
-                if not self.guest.start_by_uuid(conn=self.conn):
-                    # 不清理现场，如需清理，让用户手动通过面板删除
-                    continue
+                    # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
+                    self.dirty_scene = False
+
+                    if not self.guest.start_by_uuid(conn=self.conn):
+                        # 不清理现场，如需清理，让用户手动通过面板删除
+                        continue
+
+                elif msg['action'] == 'create_disk':
+                    Guest.make_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
+                                                       image_path=msg['image_path'], size=msg['size'])
+
+                else:
+                    pass
 
             except Exception as e:
                 logger.error(e.message)
@@ -201,7 +210,7 @@ class Host(object):
                     if Guest.gf.exists('/'.join(path_list[1:3])):
                         Guest.gf.rmtree('/'.join(path_list[1:3]))
 
-                elif msg['action'] == 'disk-resize':
+                elif msg['action'] == 'disk_resize':
 
                     if 'disk' not in msg or not all([key in msg['disk'] for key in ['device_node', 'size']]):
                         log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
@@ -209,9 +218,12 @@ class Host(object):
                         log_emit.error(log)
                         continue
 
+                    # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
+                    msg['size'] = msg['size'] * 1024 * 1024
+
                     self.guest.blockResize(disk=msg['disk'], size=msg['size'])
 
-                elif msg['action'] == 'attach-disk':
+                elif msg['action'] == 'attach_disk':
 
                     if all([key in msg for key in ['disk', 'xml']]) or \
                             not all([key in msg['disk'] for key in ['label', 'size', 'format']]):
@@ -238,7 +250,7 @@ class Host(object):
 
                     self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
 
-                elif msg['action'] == 'detach-disk':
+                elif msg['action'] == 'detach_disk':
 
                     if 'xml' not in msg:
                         log = u'分离磁盘缺少 xml 参数'
@@ -250,7 +262,7 @@ class Host(object):
                     if self.guest.isActive():
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-                    self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
+                    self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags)
 
                 elif msg['action'] == 'migrate':
 

@@ -106,10 +106,10 @@ assert isinstance(r, redis.StrictRedis)
 
 # 创建 JimV-N 向 JimV-C 推送事件消息的发射器
 log_emit = LogEmit()
-log_emit.host_event_report_queue = config.get('host_event_report_queue', 'Q:HostEvent')
+log_emit.upstream_queue = config['upstream_queue']
 log_emit.r = r
 
 event_emit = EventEmit()
-event_emit.host_event_report_queue = config.get('host_event_report_queue', 'Q:HostEvent')
+event_emit.upstream_queue = config['upstream_queue']
 event_emit.r = r
 
