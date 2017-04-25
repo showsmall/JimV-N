@@ -7,8 +7,6 @@ import libvirt
 from gluster import gfapi
 
 from initialize import logger, log_emit
-from utils import Utils
-from jimvn_exception import CommandExecFailed
 
 
 __author__ = 'James Iter'
@@ -30,7 +28,7 @@ class Guest(object):
         # 不提供链接克隆(完整克隆，后期可以在模板目录，直接删除模板文件。从理论上讲，基于完整克隆的 Guest 读写速度、快照都应该快于链接克隆。)
         # self.clone = True
         # Guest 系统盘及数据磁盘
-        self.disks = kwargs.get('disks', None)
+        self.disk = kwargs.get('disk', None)
         self.writes = kwargs.get('writes', None)
         self.xml = kwargs.get('xml', None)
         self.guest_dir = None
@@ -58,46 +56,14 @@ class Guest(object):
             log_emit.error(msg=log)
             return False
 
-        self.system_image_path = self.guest_dir + '/' + self.disks[0]['label'] + '.' + self.disks[0]['format']
+        self.system_image_path = self.guest_dir + '/' + self.disk['uuid'] + '.' + self.disk['format']
 
         self.gf.copy(self.template_path, self.system_image_path)
 
         return True
 
-    @staticmethod
-    def make_qemu_image_by_glusterfs(glusterfs_volume, image_path, size):
-        image_path = '/'.join(['gluster://127.0.0.1', glusterfs_volume, image_path])
-
-        cmd = ' '.join(['/usr/bin/qemu-img', 'create', '-f', 'qcow2', image_path, size.__str__() + 'G'])
-        exit_status, output = Utils.shell_cmd(cmd)
-
-        if exit_status != 0:
-            log = u' '.join([u'路径', image_path, u'创建磁盘时，命令执行退出异常：', str(output)])
-            logger.error(msg=log)
-            raise CommandExecFailed(log)
-
-        return True
-
-    def generate_guest_disk_image(self):
-        try:
-            for disk in self.disks[1:4]:
-
-                image_path = '/'.join([self.guest_dir, disk['label'] + '.' + disk['format']])
-
-                self.make_qemu_image_by_glusterfs(image_path=image_path, glusterfs_volume=self.glusterfs_volume,
-                                                  size=disk['size'])
-
-        except CommandExecFailed as e:
-            log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'创建磁盘时，命令执行退出异常：', e.message])
-            logger.error(msg=log)
-            log_emit.error(msg=log)
-
-            return False
-
-        return True
-
     def init_config(self):
-        self.g.add_drive(filename=self.glusterfs_volume + '/' + self.system_image_path, format=self.disks[0]['format'],
+        self.g.add_drive(filename=self.glusterfs_volume + '/' + self.system_image_path, format=self.disk['format'],
                          protocol='gluster', server=['127.0.0.1'])
         self.g.launch()
         self.g.mount(self.g.inspect_os()[0], '/')

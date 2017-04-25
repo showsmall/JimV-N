@@ -14,6 +14,7 @@ from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, log_emit, event_emit
 from guest import Guest
+from guest_disk import GuestDisk
 from utils import Utils
 
 
@@ -55,11 +56,11 @@ class Host(object):
 
             self.dirty_scene = False
 
-    def create_guest_engine(self):
+    def downstream_queue_process_engine(self):
         while True:
             if Utils.exit_flag:
                 Utils.thread_counter -= 1
-                print 'Thread create_guest_engine say bye-bye'
+                print 'Thread downstream_queue_process_engine say bye-bye'
                 return
 
             try:
@@ -70,7 +71,7 @@ class Host(object):
                 # sleep 加 1，避免 load_avg 为 0 时，循环过度
                 time.sleep(load_avg * 10 + 1)
                 if config['debug']:
-                    print 'create_guest_engine alive: ' + ji.JITime.gmt(ts=time.time())
+                    print 'downstream_queue_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
                 # 大于 0.6 的系统将不再被分配创建虚拟机
                 if load_avg > 0.6:
@@ -90,7 +91,7 @@ class Host(object):
                 if msg['action'] == 'create_vm':
 
                     self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
-                                       template_path=msg['template_path'], disks=msg['guest_disks'],
+                                       template_path=msg['template_path'], disk=msg['guest_disk'],
                                        writes=msg['writes'], xml=msg['xml'])
                     if Guest.gf is None:
                         Guest.glusterfs_volume = msg['glusterfs_volume']
@@ -107,9 +108,6 @@ class Host(object):
                     # 由该线程最顶层的异常捕获机制，处理其抛出的异常
                     self.guest.init_config()
 
-                    if not self.guest.generate_guest_disk_image():
-                        continue
-
                     if not self.guest.define_by_xml(conn=self.conn):
                         continue
 
@@ -121,8 +119,20 @@ class Host(object):
                         continue
 
                 elif msg['action'] == 'create_disk':
-                    Guest.make_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
-                                                       image_path=msg['image_path'], size=msg['size'])
+                    GuestDisk.make_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
+                                                           image_path=msg['image_path'], size=msg['size'])
+
+                # 离线磁盘扩容
+                elif msg['action'] == 'resize_disk':
+                    GuestDisk.resize_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
+                                                             image_path=msg['image_path'], size=msg['size'])
+
+                elif msg['action'] == 'delete_disk':
+                    if Guest.gf is None:
+                        Guest.glusterfs_volume = msg['glusterfs_volume']
+                        Guest.init_gfapi()
+
+                    GuestDisk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path'])
 
                 else:
                     pass
@@ -210,9 +220,10 @@ class Host(object):
                     if Guest.gf.exists('/'.join(path_list[1:3])):
                         Guest.gf.rmtree('/'.join(path_list[1:3]))
 
-                elif msg['action'] == 'disk_resize':
+                # 在线磁盘扩容
+                elif msg['action'] == 'resize_disk':
 
-                    if 'disk' not in msg or not all([key in msg['disk'] for key in ['device_node', 'size']]):
+                    if not all([key in msg for key in ['device_node', 'size']]):
                         log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
                         logger.error(log)
                         log_emit.error(log)
@@ -221,28 +232,15 @@ class Host(object):
                     # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
                     msg['size'] = msg['size'] * 1024 * 1024
 
-                    self.guest.blockResize(disk=msg['disk'], size=msg['size'])
+                    self.guest.blockResize(disk=msg['device_node'], size=msg['size'])
 
                 elif msg['action'] == 'attach_disk':
 
-                    if all([key in msg for key in ['disk', 'xml']]) or \
-                            not all([key in msg['disk'] for key in ['label', 'size', 'format']]):
-                        log = u'添加磁盘缺少 xml、disk 或 disk["label|size|format"] 参数'
+                    if 'xml' not in msg:
+                        log = u'添加磁盘缺少 xml 参数'
                         logger.error(log)
                         log_emit.error(log)
                         continue
-
-                    root = ET.fromstring(self.guest.XMLDesc())
-                    # 签出系统镜像路径
-                    path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
-                    glusterfs_volume = path_list[0]
-                    # 新添加的磁盘镜像，在 glusterfs 目标卷上的存放路径
-                    image_path = '/'.join(['/'.join([path_list[1:3]]),
-                                           msg['disk']['label'] + '.' + msg['disk']['format']])
-                    size = msg['disk']['size']
-
-                    Guest.make_qemu_image_by_glusterfs(glusterfs_volume=glusterfs_volume, image_path=image_path,
-                                                       size=size)
 
                     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
                     if self.guest.isActive():
