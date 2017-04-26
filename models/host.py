@@ -210,11 +210,13 @@ class Host(object):
                     self.guest.resume()
 
                 elif msg['action'] == 'delete':
-                    self.guest.destroy()
-                    self.guest.undefine()
                     root = ET.fromstring(self.guest.XMLDesc())
                     # 签出系统镜像路径
                     path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
+
+                    self.guest.destroy()
+                    self.guest.undefine()
+
                     if Guest.gf is None:
                         Guest.glusterfs_volume = path_list[0]
                         Guest.init_gfapi()
