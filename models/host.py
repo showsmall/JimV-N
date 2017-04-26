@@ -39,6 +39,8 @@ class Host(object):
             raise ConnFailed(u'打开连接失败 --> ' + sys.stderr)
 
     def refresh_guest_mapping(self):
+        # TODO: 加入多线程锁
+        self.guest_mapping_by_uuid.clear()
         for guest in self.conn.listAllDomains():
             self.guest_mapping_by_uuid[guest.UUIDString()] = guest
 
@@ -92,7 +94,7 @@ class Host(object):
 
                     self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
                                        template_path=msg['template_path'], disk=msg['guest_disk'],
-                                       writes=msg['writes'], xml=msg['xml'])
+                                       password=msg['password'], writes=msg['writes'], xml=msg['xml'])
                     if Guest.gf is None:
                         Guest.glusterfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
