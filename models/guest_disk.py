@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 
+import os
+
 from utils import Utils
 from jimvn_exception import CommandExecFailed
 
@@ -16,7 +18,11 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 class GuestDisk(object):
     @staticmethod
-    def make_qemu_image_by_glusterfs(glusterfs_volume, image_path, size):
+    def make_qemu_image_by_glusterfs(gf, glusterfs_volume, image_path, size):
+
+        if not gf.isdir(os.path.dirname(image_path)):
+            gf.makedirs(os.path.dirname(image_path))
+
         image_path = '/'.join(['gluster://127.0.0.1', glusterfs_volume, image_path])
 
         cmd = ' '.join(['/usr/bin/qemu-img', 'create', '-f', 'qcow2', image_path, size.__str__() + 'G'])

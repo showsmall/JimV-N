@@ -39,7 +39,7 @@ class Host(object):
             raise ConnFailed(u'打开连接失败 --> ' + sys.stderr)
 
     def refresh_guest_mapping(self):
-        # TODO: 加入多线程锁
+        # 调用该方法的函数，都为单独的对象实例。即不存在多线程共用该方法，故而不用加多线程锁
         self.guest_mapping_by_uuid.clear()
         for guest in self.conn.listAllDomains():
             self.guest_mapping_by_uuid[guest.UUIDString()] = guest
@@ -121,7 +121,11 @@ class Host(object):
                         continue
 
                 elif msg['action'] == 'create_disk':
-                    GuestDisk.make_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
+                    if Guest.gf is None:
+                        Guest.glusterfs_volume = msg['glusterfs_volume']
+                        Guest.init_gfapi()
+
+                    GuestDisk.make_qemu_image_by_glusterfs(gf=Guest.gf, glusterfs_volume=msg['glusterfs_volume'],
                                                            image_path=msg['image_path'], size=msg['size'])
 
                 # 离线磁盘扩容
@@ -310,9 +314,9 @@ class Host(object):
                 if config['debug']:
                     print 'guest_state_report_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
-                self.refresh_guest_mapping()
-
                 time.sleep(2)
+
+                self.refresh_guest_mapping()
 
                 for uuid, domain in self.guest_mapping_by_uuid.items():
                     # state 参考链接：
