@@ -79,7 +79,7 @@ class Host(object):
                 if load_avg > 0.6:
                     continue
 
-                msg = r.rpop(config['downstream_queue'])
+                msg = r.lpop(config['downstream_queue'])
                 if msg is None:
                     continue
 
