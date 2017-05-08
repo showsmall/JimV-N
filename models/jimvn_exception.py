@@ -34,3 +34,7 @@ class DomainNotExist(JimVNException):
 class CommandExecFailed(JimVNException):
     pass
 
+
+class CommandExecFailed(JimVNException):
+    pass
+

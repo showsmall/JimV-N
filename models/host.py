@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 
 from jimvn_exception import ConnFailed
 
-from initialize import config, logger, r, log_emit, event_emit
+from initialize import config, logger, r, log_emit, event_emit, response_emit
 from guest import Guest
 from guest_disk import GuestDisk
 from utils import Utils
@@ -56,6 +56,8 @@ class Host(object):
                 logger.warn(msg=log)
                 log_emit.warn(msg=log)
 
+            response_emit.failure(action='create_vm', uuid=self.guest.uuid)
+
             self.dirty_scene = False
 
     def downstream_queue_process_engine(self):
@@ -64,6 +66,8 @@ class Host(object):
                 Utils.thread_counter -= 1
                 print 'Thread downstream_queue_process_engine say bye-bye'
                 return
+
+            msg = dict()
 
             try:
                 # 清理上个周期弄脏的现场
@@ -115,6 +119,7 @@ class Host(object):
 
                     # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
                     self.dirty_scene = False
+                    response_emit.success(action='create_vm', uuid=self.guest.uuid)
 
                     if not self.guest.start_by_uuid(conn=self.conn):
                         # 不清理现场，如需清理，让用户手动通过面板删除
@@ -125,20 +130,32 @@ class Host(object):
                         Guest.glusterfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
 
-                    GuestDisk.make_qemu_image_by_glusterfs(gf=Guest.gf, glusterfs_volume=msg['glusterfs_volume'],
-                                                           image_path=msg['image_path'], size=msg['size'])
+                    if GuestDisk.make_qemu_image_by_glusterfs(gf=Guest.gf, glusterfs_volume=msg['glusterfs_volume'],
+                                                              image_path=msg['image_path'], size=msg['size']):
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 # 离线磁盘扩容
                 elif msg['action'] == 'resize_disk':
-                    GuestDisk.resize_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
-                                                             image_path=msg['image_path'], size=msg['size'])
+                    if GuestDisk.resize_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
+                                                                image_path=msg['image_path'], size=msg['size']):
+                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['disk_uuid'])
 
                 elif msg['action'] == 'delete_disk':
                     if Guest.gf is None:
                         Guest.glusterfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
 
-                    GuestDisk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path'])
+                    if GuestDisk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']):
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 else:
                     pass
@@ -146,6 +163,7 @@ class Host(object):
             except Exception as e:
                 logger.error(e.message)
                 log_emit.error(e.message)
+                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'))
 
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_operate_engine(self):
@@ -173,6 +191,10 @@ class Host(object):
                     log_emit.error(e.message)
                     continue
 
+                # guest_uuid 与 uuid 一个意思
+                if 'guest_uuid' in msg:
+                    msg['uuid'] = msg['guest_uuid']
+
                 # 下列语句繁琐写法如 <code>if 'action' not in msg or 'uuid' not in msg:</code>
                 if not all([key in msg for key in ['action', 'uuid']]):
                     continue
@@ -192,92 +214,124 @@ class Host(object):
                 assert isinstance(self.guest, libvirt.virDomain)
 
                 if msg['action'] == 'reboot':
-                    self.guest.reboot()
+                    if self.guest.reboot():
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'force_reboot':
-                    self.guest.destroy()
-                    self.guest.create()
+                    if self.guest.destroy() and self.guest.create():
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'shutdown':
-                    self.guest.shutdown()
+                    if self.guest.shutdown():
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'force_shutdown':
-                    self.guest.destroy()
+                    if self.guest.destroy():
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'boot':
-                    self.guest.create()
+                    if self.guest.create():
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'suspend':
-                    self.guest.suspend()
+                    if self.guest.suspend():
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'resume':
-                    self.guest.resume()
+                    if self.guest.resume():
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'delete':
                     root = ET.fromstring(self.guest.XMLDesc())
                     # 签出系统镜像路径
                     path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
 
-                    self.guest.destroy()
-                    self.guest.undefine()
-
                     if Guest.gf is None:
                         Guest.glusterfs_volume = path_list[0]
                         Guest.init_gfapi()
 
-                    if Guest.gf.exists('/'.join(path_list[1:3])):
-                        Guest.gf.rmtree('/'.join(path_list[1:3]))
+                    if self.guest.destroy() and self.guest.undefine() and Guest.gf.exists('/'.join(path_list[1:3])) \
+                            and Guest.gf.rmtree('/'.join(path_list[1:3])):
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 # 在线磁盘扩容
                 elif msg['action'] == 'resize_disk':
 
                     if not all([key in msg for key in ['device_node', 'size']]):
                         log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
-                        logger.error(log)
-                        log_emit.error(log)
-                        continue
+                        raise KeyError(log)
 
                     # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
                     msg['size'] = msg['size'] * 1024 * 1024
 
-                    self.guest.blockResize(disk=msg['device_node'], size=msg['size'])
+                    if self.guest.blockResize(disk=msg['device_node'], size=msg['size']):
+                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['disk_uuid'])
 
                 elif msg['action'] == 'attach_disk':
 
                     if 'xml' not in msg:
                         log = u'添加磁盘缺少 xml 参数'
-                        logger.error(log)
-                        log_emit.error(log)
-                        continue
+                        raise KeyError(log)
 
                     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
                     if self.guest.isActive():
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-                    self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
+                    if self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags):
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'detach_disk':
 
                     if 'xml' not in msg:
                         log = u'分离磁盘缺少 xml 参数'
-                        logger.error(log)
-                        log_emit.error(log)
-                        continue
+                        raise KeyError(log)
 
                     flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
                     if self.guest.isActive():
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-                    self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags)
+                    if self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags):
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 elif msg['action'] == 'migrate':
 
                     # duri like qemu+ssh://destination_host/system
                     if 'duri' not in msg:
                         log = u'迁移操作缺少 duri 参数'
-                        logger.error(log)
-                        log_emit.error(log)
-                        continue
+                        raise KeyError(log)
 
                     flags = libvirt.VIR_MIGRATE_PEER2PEER | \
                         libvirt.VIR_MIGRATE_TUNNELLED | \
@@ -288,7 +342,11 @@ class Host(object):
                     if self.guest.isActive():
                         flags |= libvirt.VIR_MIGRATE_LIVE
 
-                    self.guest.migrateToURI(duri=msg['duri'], flags=flags)
+                    if self.guest.migrateToURI(duri=msg['duri'], flags=flags):
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
 
                 else:
                     log = u'未支持的 action：' + msg['action']
@@ -298,6 +356,7 @@ class Host(object):
             except Exception as e:
                 logger.error(e.message)
                 log_emit.error(e.message)
+                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'))
 
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_state_report_engine(self):

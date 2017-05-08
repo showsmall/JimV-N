@@ -6,7 +6,7 @@ import commands
 import jimit as ji
 import json
 
-from models import LogLevel, EmitKind, GuestState
+from models import LogLevel, EmitKind, GuestState, ResponseState
 
 
 __author__ = 'James Iter'
@@ -109,4 +109,43 @@ class EventEmit(Emit):
     def pm_suspended(self, uuid):
         return self.emit2(_type=GuestState.pm_suspended.value, uuid=uuid)
 
+
+class ResponseEmit(Emit):
+    def __init__(self):
+        super(ResponseEmit, self).__init__()
+
+    def emit2(self, _type=None, action=None, uuid=None):
+        return self.emit(_kind=EmitKind.response.value, _type=_type, message={'action': action, 'uuid': uuid})
+
+    def success(self, action, uuid):
+        return self.emit2(_type=ResponseState.success.value, action=action, uuid=uuid)
+
+    def failure(self, action, uuid):
+        return self.emit2(_type=ResponseState.failure.value, action=action, uuid=uuid)
+
+"""
+    def create_vm_success(self, uuid):
+        return self.emit2(_type=ResponseState.create_vm_success.value, uuid=uuid)
+
+    def create_vm_failure(self, uuid):
+        return self.emit2(_type=ResponseState.create_vm_failure.value, uuid=uuid)
+
+    def create_disk_success(self, uuid):
+        return self.emit2(_type=ResponseState.create_disk_success.value, uuid=uuid)
+
+    def create_disk_failure(self, uuid):
+        return self.emit2(_type=ResponseState.create_disk_failure.value, uuid=uuid)
+
+    def resize_disk_success(self, uuid):
+        return self.emit2(_type=ResponseState.resize_disk_success.value, uuid=uuid)
+
+    def resize_disk_failure(self, uuid):
+        return self.emit2(_type=ResponseState.resize_disk_failure.value, uuid=uuid)
+
+    def delete_disk_success(self, uuid):
+        return self.emit2(_type=ResponseState.delete_disk_success.value, uuid=uuid)
+
+    def delete_disk_failure(self, uuid):
+        return self.emit2(_type=ResponseState.delete_disk_failure.value, uuid=uuid)
+"""
 

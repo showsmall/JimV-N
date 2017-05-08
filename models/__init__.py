@@ -5,7 +5,8 @@
 from status import (
     EmitKind,
     GuestState,
-    LogLevel
+    LogLevel,
+    ResponseState
 )
 
 from initialize import (
@@ -36,6 +37,6 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 __all__ = [
-    'Init', 'Guest', 'GuestDisk', 'Host', 'Utils', 'Emit', 'EmitKind', 'GuestState', 'LogLevel'
+    'Init', 'Guest', 'GuestDisk', 'Host', 'Utils', 'Emit', 'EmitKind', 'GuestState', 'LogLevel', 'ResponseState'
 ]
 
