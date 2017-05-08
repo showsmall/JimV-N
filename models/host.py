@@ -56,8 +56,6 @@ class Host(object):
                 logger.warn(msg=log)
                 log_emit.warn(msg=log)
 
-            response_emit.failure(action='create_vm', uuid=self.guest.uuid)
-
             self.dirty_scene = False
 
     def downstream_queue_process_engine(self):
@@ -109,17 +107,22 @@ class Host(object):
                     self.dirty_scene = True
 
                     if not self.guest.generate_system_image():
+                        response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
+                                              passback_parameters=msg.get('passback_parameters'))
                         continue
 
                     # 由该线程最顶层的异常捕获机制，处理其抛出的异常
                     self.guest.init_config()
 
                     if not self.guest.define_by_xml(conn=self.conn):
+                        response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
+                                              passback_parameters=msg.get('passback_parameters'))
                         continue
 
                     # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
                     self.dirty_scene = False
-                    response_emit.success(action='create_vm', uuid=self.guest.uuid)
+                    response_emit.success(action=msg['action'], uuid=self.guest.uuid,
+                                          passback_parameters=msg.get('passback_parameters'))
 
                     if not self.guest.start_by_uuid(conn=self.conn):
                         # 不清理现场，如需清理，让用户手动通过面板删除
@@ -132,19 +135,23 @@ class Host(object):
 
                     if GuestDisk.make_qemu_image_by_glusterfs(gf=Guest.gf, glusterfs_volume=msg['glusterfs_volume'],
                                                               image_path=msg['image_path'], size=msg['size']):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 # 离线磁盘扩容
                 elif msg['action'] == 'resize_disk':
                     if GuestDisk.resize_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
                                                                 image_path=msg['image_path'], size=msg['size']):
-                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['disk_uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['disk_uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'delete_disk':
                     if Guest.gf is None:
@@ -152,10 +159,12 @@ class Host(object):
                         Guest.init_gfapi()
 
                     if GuestDisk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 else:
                     pass
@@ -163,7 +172,8 @@ class Host(object):
             except Exception as e:
                 logger.error(e.message)
                 log_emit.error(e.message)
-                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'))
+                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
+                                      passback_parameters=msg.get('passback_parameters'))
 
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_operate_engine(self):
@@ -215,52 +225,66 @@ class Host(object):
 
                 if msg['action'] == 'reboot':
                     if self.guest.reboot():
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'force_reboot':
                     if self.guest.destroy() and self.guest.create():
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'shutdown':
                     if self.guest.shutdown():
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'force_shutdown':
                     if self.guest.destroy():
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'boot':
                     if self.guest.create():
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'suspend':
                     if self.guest.suspend():
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'resume':
                     if self.guest.resume():
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'delete':
                     root = ET.fromstring(self.guest.XMLDesc())
@@ -273,10 +297,12 @@ class Host(object):
 
                     if self.guest.destroy() and self.guest.undefine() and Guest.gf.exists('/'.join(path_list[1:3])) \
                             and Guest.gf.rmtree('/'.join(path_list[1:3])):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 # 在线磁盘扩容
                 elif msg['action'] == 'resize_disk':
@@ -289,10 +315,12 @@ class Host(object):
                     msg['size'] = msg['size'] * 1024 * 1024
 
                     if self.guest.blockResize(disk=msg['device_node'], size=msg['size']):
-                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['disk_uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['disk_uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'attach_disk':
 
@@ -305,10 +333,12 @@ class Host(object):
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
                     if self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'detach_disk':
 
@@ -321,10 +351,12 @@ class Host(object):
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
                     if self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'migrate':
 
@@ -343,10 +375,12 @@ class Host(object):
                         flags |= libvirt.VIR_MIGRATE_LIVE
 
                     if self.guest.migrateToURI(duri=msg['duri'], flags=flags):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                     else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'])
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 else:
                     log = u'未支持的 action：' + msg['action']
@@ -356,7 +390,8 @@ class Host(object):
             except Exception as e:
                 logger.error(e.message)
                 log_emit.error(e.message)
-                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'))
+                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
+                                      passback_parameters=msg.get('passback_parameters'))
 
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_state_report_engine(self):

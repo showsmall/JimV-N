@@ -114,14 +114,17 @@ class ResponseEmit(Emit):
     def __init__(self):
         super(ResponseEmit, self).__init__()
 
-    def emit2(self, _type=None, action=None, uuid=None):
-        return self.emit(_kind=EmitKind.response.value, _type=_type, message={'action': action, 'uuid': uuid})
+    def emit2(self, _type=None, action=None, uuid=None, passback_parameters=None):
+        return self.emit(_kind=EmitKind.response.value, _type=_type,
+                         message={'action': action, 'uuid': uuid, 'passback_parameters': passback_parameters})
 
-    def success(self, action, uuid):
-        return self.emit2(_type=ResponseState.success.value, action=action, uuid=uuid)
+    def success(self, action, uuid, passback_parameters):
+        return self.emit2(_type=ResponseState.success.value, action=action, uuid=uuid,
+                          passback_parameters=passback_parameters)
 
-    def failure(self, action, uuid):
-        return self.emit2(_type=ResponseState.failure.value, action=action, uuid=uuid)
+    def failure(self, action, uuid, passback_parameters):
+        return self.emit2(_type=ResponseState.failure.value, action=action, uuid=uuid,
+                          passback_parameters=passback_parameters)
 
 """
     def create_vm_success(self, uuid):
