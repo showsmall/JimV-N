@@ -328,7 +328,8 @@ class Host(object):
                     if self.guest.isActive():
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-                    self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
+                    # 添加磁盘成功返回时，ret值为0。可参考 Linux 命令返回值规范？
+                    ret = self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
                     response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                           passback_parameters=msg.get('passback_parameters'))
 
