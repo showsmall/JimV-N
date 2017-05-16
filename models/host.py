@@ -314,13 +314,9 @@ class Host(object):
                     # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
                     msg['size'] = msg['size'] * 1024 * 1024
 
-                    if self.guest.blockResize(disk=msg['device_node'], size=msg['size']):
-                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['disk_uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                    self.guest.blockResize(disk=msg['device_node'], size=msg['size'])
+                    response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
+                                          passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'attach_disk':
 
@@ -332,13 +328,9 @@ class Host(object):
                     if self.guest.isActive():
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-                    if self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                    self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
+                    response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                          passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'detach_disk':
 
@@ -350,13 +342,9 @@ class Host(object):
                     if self.guest.isActive():
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-                    if self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                    self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags)
+                    response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                          passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'migrate':
 
@@ -374,13 +362,9 @@ class Host(object):
                     if self.guest.isActive():
                         flags |= libvirt.VIR_MIGRATE_LIVE
 
-                    if self.guest.migrateToURI(duri=msg['duri'], flags=flags):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                    self.guest.migrateToURI(duri=msg['duri'], flags=flags)
+                    response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                          passback_parameters=msg.get('passback_parameters'))
 
                 else:
                     log = u'未支持的 action：' + msg['action']
