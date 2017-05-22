@@ -224,7 +224,7 @@ class Host(object):
                 assert isinstance(self.guest, libvirt.virDomain)
 
                 if msg['action'] == 'reboot':
-                    if self.guest.reboot():
+                    if self.guest.reboot() == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -233,7 +233,7 @@ class Host(object):
                                               passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'force_reboot':
-                    if self.guest.destroy() and self.guest.create():
+                    if self.guest.destroy() == 0 and self.guest.create() == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -242,7 +242,7 @@ class Host(object):
                                               passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'shutdown':
-                    if self.guest.shutdown():
+                    if self.guest.shutdown() == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -251,7 +251,7 @@ class Host(object):
                                               passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'force_shutdown':
-                    if self.guest.destroy():
+                    if self.guest.destroy() == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -260,7 +260,7 @@ class Host(object):
                                               passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'boot':
-                    if self.guest.create():
+                    if self.guest.create() == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -269,7 +269,7 @@ class Host(object):
                                               passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'suspend':
-                    if self.guest.suspend():
+                    if self.guest.suspend() == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -278,7 +278,7 @@ class Host(object):
                                               passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'resume':
-                    if self.guest.resume():
+                    if self.guest.resume() == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -295,8 +295,9 @@ class Host(object):
                         Guest.glusterfs_volume = path_list[0]
                         Guest.init_gfapi()
 
-                    if self.guest.destroy() and self.guest.undefine() and Guest.gf.exists('/'.join(path_list[1:3])) \
-                            and Guest.gf.rmtree('/'.join(path_list[1:3])):
+                    if self.guest.destroy() == 0 and self.guest.undefine() == 0 and \
+                            Guest.gf.exists('/'.join(path_list[1:3])) and \
+                            Guest.gf.rmtree('/'.join(path_list[1:3])) is None:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -314,9 +315,12 @@ class Host(object):
                     # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
                     msg['size'] = msg['size'] * 1024 * 1024
 
-                    self.guest.blockResize(disk=msg['device_node'], size=msg['size'])
-                    response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
-                                          passback_parameters=msg.get('passback_parameters'))
+                    if self.guest.blockResize(disk=msg['device_node'], size=msg['size']) == 0:
+                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'attach_disk':
 
@@ -329,9 +333,12 @@ class Host(object):
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
                     # 添加磁盘成功返回时，ret值为0。可参考 Linux 命令返回值规范？
-                    ret = self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags)
-                    response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                          passback_parameters=msg.get('passback_parameters'))
+                    if self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags) == 0:
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'detach_disk':
 
@@ -343,9 +350,12 @@ class Host(object):
                     if self.guest.isActive():
                         flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
-                    self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags)
-                    response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                          passback_parameters=msg.get('passback_parameters'))
+                    if self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags) == 0:
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'migrate':
 
@@ -360,12 +370,15 @@ class Host(object):
                         libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | \
                         libvirt.VIR_MIGRATE_COMPRESSED
 
-                    if self.guest.isActive():
+                    if self.guest.isActive() == 0:
                         flags |= libvirt.VIR_MIGRATE_LIVE
 
-                    self.guest.migrateToURI(duri=msg['duri'], flags=flags)
-                    response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                          passback_parameters=msg.get('passback_parameters'))
+                    if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
+                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
+                    else:
+                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                              passback_parameters=msg.get('passback_parameters'))
 
                 else:
                     log = u'未支持的 action：' + msg['action']
