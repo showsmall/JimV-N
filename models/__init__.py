@@ -17,8 +17,8 @@ from guest import (
     Guest
 )
 
-from guest_disk import (
-    GuestDisk
+from disk import (
+    Disk
 )
 
 from host import (
@@ -37,6 +37,6 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 __all__ = [
-    'Init', 'Guest', 'GuestDisk', 'Host', 'Utils', 'Emit', 'EmitKind', 'GuestState', 'LogLevel', 'ResponseState'
+    'Init', 'Guest', 'Disk', 'Host', 'Utils', 'Emit', 'EmitKind', 'GuestState', 'LogLevel', 'ResponseState'
 ]
 

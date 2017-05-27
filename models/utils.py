@@ -114,41 +114,17 @@ class ResponseEmit(Emit):
     def __init__(self):
         super(ResponseEmit, self).__init__()
 
-    def emit2(self, _type=None, action=None, uuid=None, passback_parameters=None):
+    def emit2(self, _type=None, action=None, uuid=None, data=None, passback_parameters=None):
         return self.emit(_kind=EmitKind.response.value, _type=_type,
-                         message={'action': action, 'uuid': uuid, 'passback_parameters': passback_parameters})
+                         message={'action': action, 'uuid': uuid, 'data': data,
+                                  'passback_parameters': passback_parameters})
 
-    def success(self, action, uuid, passback_parameters):
-        return self.emit2(_type=ResponseState.success.value, action=action, uuid=uuid,
+    def success(self, action, uuid, passback_parameters, data=None):
+        return self.emit2(_type=ResponseState.success.value, action=action, uuid=uuid, data=data,
                           passback_parameters=passback_parameters)
 
-    def failure(self, action, uuid, passback_parameters):
-        return self.emit2(_type=ResponseState.failure.value, action=action, uuid=uuid,
+    def failure(self, action, uuid, passback_parameters, data=None):
+        return self.emit2(_type=ResponseState.failure.value, action=action, uuid=uuid, data=data,
                           passback_parameters=passback_parameters)
 
-"""
-    def create_vm_success(self, uuid):
-        return self.emit2(_type=ResponseState.create_vm_success.value, uuid=uuid)
-
-    def create_vm_failure(self, uuid):
-        return self.emit2(_type=ResponseState.create_vm_failure.value, uuid=uuid)
-
-    def create_disk_success(self, uuid):
-        return self.emit2(_type=ResponseState.create_disk_success.value, uuid=uuid)
-
-    def create_disk_failure(self, uuid):
-        return self.emit2(_type=ResponseState.create_disk_failure.value, uuid=uuid)
-
-    def resize_disk_success(self, uuid):
-        return self.emit2(_type=ResponseState.resize_disk_success.value, uuid=uuid)
-
-    def resize_disk_failure(self, uuid):
-        return self.emit2(_type=ResponseState.resize_disk_failure.value, uuid=uuid)
-
-    def delete_disk_success(self, uuid):
-        return self.emit2(_type=ResponseState.delete_disk_success.value, uuid=uuid)
-
-    def delete_disk_failure(self, uuid):
-        return self.emit2(_type=ResponseState.delete_disk_failure.value, uuid=uuid)
-"""
 

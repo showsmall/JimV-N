@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import os
 
 import guestfs
 import libvirt
@@ -31,7 +31,6 @@ class Guest(object):
         self.disk = kwargs.get('disk', None)
         self.writes = kwargs.get('writes', None)
         self.xml = kwargs.get('xml', None)
-        self.guest_dir = None
         # Guest 系统镜像路径，不包含 glusterfs 卷标
         self.system_image_path = None
         self.g = guestfs.GuestFS(python_return_dict=True)
@@ -41,14 +40,6 @@ class Guest(object):
         cls.gf = gfapi.Volume('127.0.0.1', cls.glusterfs_volume)
         cls.gf.mount()
 
-    def generate_guest_dir(self):
-        self.guest_dir = '/'.join(['VMs', self.name])
-
-        if not self.gf.isdir(self.guest_dir):
-            self.gf.makedirs(self.guest_dir, 0755)
-
-        return True
-
     def generate_system_image(self):
         if not self.gf.isfile(self.template_path):
             log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'所依赖的模板', self.template_path, u'不存在.'])
@@ -56,7 +47,8 @@ class Guest(object):
             log_emit.error(msg=log)
             return False
 
-        self.system_image_path = self.guest_dir + '/' + self.disk['uuid'] + '.' + self.disk['format']
+        if not self.gf.isdir(os.path.dirname(self.system_image_path)):
+            self.gf.makedirs(os.path.dirname(self.system_image_path), 0755)
 
         self.gf.copy(self.template_path, self.system_image_path)
 

@@ -14,7 +14,7 @@ from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, log_emit, event_emit, response_emit
 from guest import Guest
-from guest_disk import GuestDisk
+from disk import Disk
 from utils import Utils
 
 
@@ -47,16 +47,15 @@ class Host(object):
     def clear_scene(self):
 
         if self.dirty_scene:
+            self.dirty_scene = False
 
-            if self.guest.gf.exists(self.guest.guest_dir):
-                self.guest.gf.rmtree(self.guest.guest_dir)
+            if self.guest.gf.exists(self.guest.system_image_path):
+                self.guest.gf.remove(self.guest.system_image_path)
 
             else:
                 log = u'清理现场失败: 不存在的路径 --> ' + self.guest.guest_dir
                 logger.warn(msg=log)
                 log_emit.warn(msg=log)
-
-            self.dirty_scene = False
 
     def downstream_queue_process_engine(self):
         while True:
@@ -92,16 +91,16 @@ class Host(object):
                     log_emit.error(e.message)
                     continue
 
-                if msg['action'] == 'create_vm':
+                if msg['action'] == 'create_guest':
 
                     self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
-                                       template_path=msg['template_path'], disk=msg['guest_disk'],
+                                       template_path=msg['template_path'], disk=msg['disk'],
                                        password=msg['password'], writes=msg['writes'], xml=msg['xml'])
                     if Guest.gf is None:
                         Guest.glusterfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
 
-                    self.guest.generate_guest_dir()
+                    self.guest.system_image_path = self.guest.disk['path']
 
                     # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
                     self.dirty_scene = True
@@ -121,7 +120,11 @@ class Host(object):
 
                     # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
                     self.dirty_scene = False
-                    response_emit.success(action=msg['action'], uuid=self.guest.uuid,
+
+                    disk_info = Disk.disk_info(glusterfs_volume=self.guest.glusterfs_volume,
+                                               image_path=self.guest.system_image_path)
+
+                    response_emit.success(action=msg['action'], uuid=self.guest.uuid, data={'disk_info': disk_info},
                                           passback_parameters=msg.get('passback_parameters'))
 
                     if not self.guest.start_by_uuid(conn=self.conn):
@@ -133,8 +136,8 @@ class Host(object):
                         Guest.glusterfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
 
-                    if GuestDisk.make_qemu_image_by_glusterfs(gf=Guest.gf, glusterfs_volume=msg['glusterfs_volume'],
-                                                              image_path=msg['image_path'], size=msg['size']):
+                    if Disk.make_qemu_image_by_glusterfs(gf=Guest.gf, glusterfs_volume=msg['glusterfs_volume'],
+                                                         image_path=msg['image_path'], size=msg['size']):
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -144,8 +147,8 @@ class Host(object):
 
                 # 离线磁盘扩容
                 elif msg['action'] == 'resize_disk':
-                    if GuestDisk.resize_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
-                                                                image_path=msg['image_path'], size=msg['size']):
+                    if Disk.resize_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
+                                                           image_path=msg['image_path'], size=msg['size']):
                         response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -158,7 +161,7 @@ class Host(object):
                         Guest.glusterfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
 
-                    if GuestDisk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']):
+                    if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']):
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -286,7 +289,7 @@ class Host(object):
                         response_emit.failure(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
-                elif msg['action'] == 'delete':
+                elif msg['action'] == 'delete_guest':
                     root = ET.fromstring(self.guest.XMLDesc())
                     # 签出系统镜像路径
                     path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
@@ -295,9 +298,12 @@ class Host(object):
                         Guest.glusterfs_volume = path_list[0]
                         Guest.init_gfapi()
 
-                    if self.guest.destroy() == 0 and self.guest.undefine() == 0 and \
-                            Guest.gf.exists('/'.join(path_list[1:3])) and \
-                            Guest.gf.rmtree('/'.join(path_list[1:3])) is None:
+                    if self.guest.isActive():
+                        self.guest.destroy()
+
+                    if self.guest.undefine() == 0 and \
+                            Guest.gf.exists('/'.join(path_list[1:])) and \
+                            Guest.gf.remove('/'.join(path_list[1:])) is None:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
 
@@ -387,9 +393,9 @@ class Host(object):
 
             except Exception as e:
                 logger.error(e.message)
-                log_emit.error(e.message)
-                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
-                                      passback_parameters=msg.get('passback_parameters'))
+                # log_emit.error(e.message)
+                # response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
+                #                       passback_parameters=msg.get('passback_parameters'))
 
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_state_report_engine(self):
