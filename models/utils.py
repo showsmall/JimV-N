@@ -6,8 +6,7 @@ import commands
 import jimit as ji
 import json
 
-from models import LogLevel, EmitKind, GuestState, ResponseState
-
+from models import LogLevel, EmitKind, GuestState, ResponseState, HostEvent
 
 __author__ = 'James Iter'
 __date__ = '2017/3/13'
@@ -78,12 +77,12 @@ class LogEmit(Emit):
         return self.emit2(_type=LogLevel.critical.value, message=msg)
 
 
-class EventEmit(Emit):
+class GuestEventEmit(Emit):
     def __init__(self):
-        super(EventEmit, self).__init__()
+        super(GuestEventEmit, self).__init__()
 
     def emit2(self, _type=None, uuid=None):
-        return self.emit(_kind=EmitKind.event.value, _type=_type, message={'uuid': uuid})
+        return self.emit(_kind=EmitKind.guest_event.value, _type=_type, message={'uuid': uuid})
 
     def no_state(self, uuid):
         return self.emit2(_type=GuestState.no_state.value, uuid=uuid)
@@ -108,6 +107,17 @@ class EventEmit(Emit):
 
     def pm_suspended(self, uuid):
         return self.emit2(_type=GuestState.pm_suspended.value, uuid=uuid)
+
+
+class HostEventEmit(Emit):
+    def __init__(self):
+        super(HostEventEmit, self).__init__()
+
+    def emit2(self, _type=None, node_id=None):
+        return self.emit(_kind=EmitKind.host_event.value, _type=_type, message={'node_id': node_id})
+
+    def heartbeat(self, node_id):
+        return self.emit2(_type=HostEvent.heartbeat.value, node_id=node_id)
 
 
 class ResponseEmit(Emit):

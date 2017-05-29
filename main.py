@@ -40,6 +40,10 @@ if __name__ == '__main__':
         thread.start_new_thread(host_use_for_guest_state_report_engine.guest_state_report_engine, ())
         Utils.thread_counter += 1
 
+        host_use_for_host_state_report_engine = Host()
+        thread.start_new_thread(host_use_for_host_state_report_engine.state_report_engine, ())
+        Utils.thread_counter += 1
+
         while Utils.thread_counter > 0:
             time.sleep(1)
 

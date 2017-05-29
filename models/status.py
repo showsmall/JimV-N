@@ -13,8 +13,9 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 class EmitKind(IntEnum):
     log = 0
-    event = 1
-    response = 2
+    guest_event = 1
+    host_event = 2
+    response = 3
 
 
 class GuestState(IntEnum):
@@ -31,6 +32,10 @@ class GuestState(IntEnum):
     pm_suspended = 7
 
 
+class HostEvent(IntEnum):
+    heartbeat = 0
+
+
 class LogLevel(IntEnum):
     critical = 0
     error = 1
@@ -42,14 +47,4 @@ class LogLevel(IntEnum):
 class ResponseState(IntEnum):
     success = True
     failure = False
-    """
-    create_vm_success = 0
-    create_vm_failure = 1
-    create_disk_success = 2
-    create_disk_failure = 3
-    resize_disk_success = 4
-    resize_disk_failure = 5
-    delete_disk_success = 6
-    delete_disk_failure = 7
-    """
 

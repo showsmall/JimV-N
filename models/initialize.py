@@ -11,7 +11,7 @@ import getopt
 import redis
 
 from jimvn_exception import PathNotExist
-from utils import LogEmit, EventEmit, ResponseEmit
+from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit
 
 
 __author__ = 'James Iter'
@@ -109,9 +109,13 @@ log_emit = LogEmit()
 log_emit.upstream_queue = config['upstream_queue']
 log_emit.r = r
 
-event_emit = EventEmit()
-event_emit.upstream_queue = config['upstream_queue']
-event_emit.r = r
+guest_event_emit = GuestEventEmit()
+guest_event_emit.upstream_queue = config['upstream_queue']
+guest_event_emit.r = r
+
+host_event_emit = HostEventEmit()
+host_event_emit.upstream_queue = config['upstream_queue']
+host_event_emit.r = r
 
 response_emit = ResponseEmit()
 response_emit.upstream_queue = config['upstream_queue']

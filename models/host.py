@@ -9,10 +9,11 @@ import libvirt
 import json
 import jimit as ji
 import xml.etree.ElementTree as ET
+import uuid
 
 from jimvn_exception import ConnFailed
 
-from initialize import config, logger, r, log_emit, event_emit, response_emit
+from initialize import config, logger, r, log_emit, guest_event_emit, response_emit, host_event_emit
 from guest import Guest
 from disk import Disk
 from utils import Utils
@@ -31,6 +32,7 @@ class Host(object):
         self.guest = None
         self.guest_mapping_by_uuid = dict()
         self.hostname = ji.Common.get_hostname()
+        self.node_id = uuid.getnode()
 
     def init_conn(self):
         self.conn = libvirt.open()
@@ -393,9 +395,9 @@ class Host(object):
 
             except Exception as e:
                 logger.error(e.message)
-                # log_emit.error(e.message)
-                # response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
-                #                       passback_parameters=msg.get('passback_parameters'))
+                log_emit.error(e.message)
+                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
+                                      passback_parameters=msg.get('passback_parameters'))
 
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_state_report_engine(self):
@@ -433,39 +435,63 @@ class Host(object):
 
                     if state == libvirt.VIR_DOMAIN_RUNNING:
                         log += u' Running。'
-                        event_emit.running(uuid=uuid)
+                        guest_event_emit.running(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_BLOCKED:
                         log += u' Blocked。'
-                        event_emit.blocked(uuid=uuid)
+                        guest_event_emit.blocked(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_PAUSED:
                         log += u' Paused。'
-                        event_emit.paused(uuid=uuid)
+                        guest_event_emit.paused(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_SHUTDOWN:
                         log += u' Shutdown。'
-                        event_emit.shutdown(uuid=uuid)
+                        guest_event_emit.shutdown(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_SHUTOFF:
                         log += u' Shutoff。'
-                        event_emit.shutoff(uuid=uuid)
+                        guest_event_emit.shutoff(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_CRASHED:
                         log += u' Crashed。'
-                        event_emit.crashed(uuid=uuid)
+                        guest_event_emit.crashed(uuid=uuid)
 
                     elif state == libvirt.VIR_DOMAIN_PMSUSPENDED:
                         log += u' PM_Suspended。'
-                        event_emit.pm_suspended(uuid=uuid)
+                        guest_event_emit.pm_suspended(uuid=uuid)
 
                     else:
                         log += u' NO_State。'
 
-                        event_emit.no_state(uuid=uuid)
+                        guest_event_emit.no_state(uuid=uuid)
 
                     logger.info(log)
                     log_emit.info(log)
+
+            except Exception as e:
+                logger.error(e.message)
+                log_emit.error(e.message)
+
+    # 使用时，创建独立的实例来避开 多线程 的问题
+    def state_report_engine(self):
+        """
+        宿主机状态上报引擎
+        """
+
+        while True:
+            if Utils.exit_flag:
+                Utils.thread_counter -= 1
+                print 'Thread state_report_engine say bye-bye'
+                return
+
+            try:
+                if config['debug']:
+                    print 'state_report_engine alive: ' + ji.JITime.gmt(ts=time.time())
+
+                time.sleep(2)
+
+                host_event_emit.heartbeat(node_id=self.node_id)
 
             except Exception as e:
                 logger.error(e.message)
