@@ -30,6 +30,7 @@ class GuestState(IntEnum):
     shutoff = 5
     crashed = 6
     pm_suspended = 7
+    migrating = 8
 
 
 class HostEvent(IntEnum):

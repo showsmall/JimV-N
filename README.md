@@ -26,6 +26,7 @@ virtualenv --system-site-packages ~/venv
 source ~/venv/bin/activate
 # 安装 JimV-N 所需扩展库
 pip install -r /opt/JimV-N/requirements.txt
+emerge libguestfs
 ```
 
 

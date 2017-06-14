@@ -1,4 +1,6 @@
 enum34
 jimit
 redis
+libvirt-python
+gfapi
 # http://libguestfs.org/download/python/guestfs-1.36.2.tar.gz

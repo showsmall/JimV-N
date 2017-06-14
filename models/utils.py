@@ -81,8 +81,9 @@ class GuestEventEmit(Emit):
     def __init__(self):
         super(GuestEventEmit, self).__init__()
 
-    def emit2(self, _type=None, uuid=None):
-        return self.emit(_kind=EmitKind.guest_event.value, _type=_type, message={'uuid': uuid})
+    def emit2(self, _type=None, uuid=None, migrating_info=None):
+        return self.emit(_kind=EmitKind.guest_event.value, _type=_type, message={'uuid': uuid,
+                                                                                 'migrating_info': migrating_info})
 
     def no_state(self, uuid):
         return self.emit2(_type=GuestState.no_state.value, uuid=uuid)
@@ -107,6 +108,9 @@ class GuestEventEmit(Emit):
 
     def pm_suspended(self, uuid):
         return self.emit2(_type=GuestState.pm_suspended.value, uuid=uuid)
+
+    def migrating(self, uuid, migrating_info):
+        return self.emit2(_type=GuestState.migrating.value, uuid=uuid, migrating_info=migrating_info)
 
 
 class HostEventEmit(Emit):
