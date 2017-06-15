@@ -416,17 +416,41 @@ def vir_event_loop_native_start():
     eventLoopThread.start()
 
 
+def dom_event_to_string(event):
+    # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventType
+    dom_event_strings = ("Defined",
+                         "Undefined",
+                         "Started",
+                         "Suspended",
+                         "Resumed",
+                         "Stopped",
+                         "Shutdown",
+                         "PMSuspended",
+                         "Crashed")
+    return dom_event_strings[event]
+
+
 def dom_detail_to_string(event, detail):
+    # 参考地址：https://github.com/libvirt/libvirt/blob/v3.4.0-rc2/include/libvirt/libvirt-domain.h
     dom_event_strings = (
-        ("Added", "Updated"),
-        ("Removed", ),
+        ("Added", "Updated", "Renamed", "Snapshot"),
+        # 参考地址： https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventDefinedDetailType
+        ("Removed", "Renamed"),
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventUndefinedDetailType
         ("Booted", "Migrated", "Restored", "Snapshot", "Wakeup"),
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventStartedDetailType
         ("Paused", "Migrated", "IOError", "Watchdog", "Restored", "Snapshot", "API error"),
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventSuspendedDetailType
         ("Unpaused", "Migrated", "Snapshot"),
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventResumedDetailType
         ("Shutdown", "Destroyed", "Crashed", "Migrated", "Saved", "Failed", "Snapshot"),
-        ("Finished", ),
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventStoppedDetailType
+        ("Finished", "Guest", "Host"),
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventShutdownDetailType
         ("Memory", "Disk"),
-        ("Panicked", ),
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventPMSuspendedDetailType
+        ("Panicked",),
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventCrashedDetailType
         )
     return dom_event_strings[event][detail]
 
