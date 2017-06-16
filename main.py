@@ -7,6 +7,7 @@ import thread
 import signal
 import time
 
+from models.event_process import EventProcess
 from models.initialize import logger
 from models import Host
 from models import Utils
@@ -25,9 +26,10 @@ if __name__ == '__main__':
         signal.signal(signal.SIGTERM, Utils.signal_handle)
         signal.signal(signal.SIGINT, Utils.signal_handle)
 
+        EventProcess.guest_event_register()
+
         host_use_for_downstream_queue_process_engine = Host()
         host_use_for_downstream_queue_process_engine.init_conn()
-        host_use_for_downstream_queue_process_engine.guest_event_register()
         thread.start_new_thread(host_use_for_downstream_queue_process_engine.downstream_queue_process_engine, ())
         Utils.thread_counter += 1
 
@@ -43,7 +45,7 @@ if __name__ == '__main__':
         while Utils.thread_counter > 0:
             time.sleep(1)
 
-        host_use_for_downstream_queue_process_engine.guest_event_deregister()
+        EventProcess.guest_event_deregister()
 
         print 'Main say bye-bye!'
 

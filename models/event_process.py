@@ -4,6 +4,7 @@
 
 import libvirt
 
+from models.event_loop import vir_event_loop_poll_start
 from models.initialize import guest_event_emit
 
 
@@ -14,6 +15,8 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 class EventProcess(object):
+    conn = None
+    guest_callbacks = list()
 
     VIR_DOMAIN_EVENT_SHUTDOWN_GUEST = 1
     VIR_DOMAIN_EVENT_SHUTDOWN_HOST = 2
@@ -23,6 +26,11 @@ class EventProcess(object):
 
     @classmethod
     def guest_event_callback(cls, conn, guest, event, detail, opaque):
+
+        if guest.ID() == -1:
+            # 跳过已经不再本宿主机的 guest
+            return
+
         from models import Host
         Host.guest_state_report(guest=guest)
 
@@ -174,14 +182,34 @@ class EventProcess(object):
         else:
             pass
 
-    @classmethod
-    def guest_event_migration_iteration_callback(cls, conn, guest, iteration, opaque):
-        migrate_info = dict()
-        migrate_info['type'], migrate_info['time_elapsed'], migrate_info['time_remaining'], \
-            migrate_info['data_total'], migrate_info['data_processed'], migrate_info['data_remaining'], \
-            migrate_info['mem_total'], migrate_info['mem_processed'], migrate_info['mem_remaining'], \
-            migrate_info['file_total'], migrate_info['file_processed'], migrate_info['file_remaining'] = \
-            guest.jobInfo()
+    @staticmethod
+    def guest_event_migration_iteration_callback(conn, guest, iteration, opaque):
+        try:
+            migrate_info = dict()
+            migrate_info['type'], migrate_info['time_elapsed'], migrate_info['time_remaining'], \
+                migrate_info['data_total'], migrate_info['data_processed'], migrate_info['data_remaining'], \
+                migrate_info['mem_total'], migrate_info['mem_processed'], migrate_info['mem_remaining'], \
+                migrate_info['file_total'], migrate_info['file_processed'], migrate_info['file_remaining'] = \
+                guest.jobInfo()
 
-        guest_event_emit.migrating(uuid=guest.UUIDString(), migrating_info=migrate_info)
+            guest_event_emit.migrating(uuid=guest.UUIDString(), migrating_info=migrate_info)
+
+        except libvirt.libvirtError as e:
+            pass
+
+    @classmethod
+    def guest_event_register(cls):
+        vir_event_loop_poll_start()
+        cls.conn = libvirt.open()
+        cls.conn.domainEventRegister(cls.guest_event_callback, None)
+        cls.guest_callbacks.append(cls.conn.domainEventRegisterAny(
+            None, libvirt.VIR_DOMAIN_EVENT_ID_MIGRATION_ITERATION,
+            cls.guest_event_migration_iteration_callback, None))
+
+    @classmethod
+    def guest_event_deregister(cls):
+        cls.conn.domainEventDeregister(cls.guest_event_callback)
+        for eid in cls.guest_callbacks:
+            cls.conn.domainEventDeregisterAny(eid)
+
 
