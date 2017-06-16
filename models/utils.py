@@ -8,6 +8,7 @@ import json
 
 from models import LogLevel, EmitKind, GuestState, ResponseState, HostEvent
 
+
 __author__ = 'James Iter'
 __date__ = '2017/3/13'
 __contact__ = 'james.iter.cn@gmail.com'

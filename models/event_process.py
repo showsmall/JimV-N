@@ -4,6 +4,8 @@
 
 import libvirt
 
+from models.initialize import guest_event_emit
+
 
 __author__ = 'James Iter'
 __date__ = '2017/6/15'
@@ -21,7 +23,8 @@ class EventProcess(object):
 
     @classmethod
     def guest_event_callback(cls, conn, guest, event, detail, opaque):
-        uuid = guest.UUIDString()
+        from models import Host
+        Host.guest_state_report(guest=guest)
 
         if event == libvirt.VIR_DOMAIN_EVENT_DEFINED:
             if detail == libvirt.VIR_DOMAIN_EVENT_DEFINED_ADDED:
@@ -172,6 +175,13 @@ class EventProcess(object):
             pass
 
     @classmethod
-    def guest_event_migration_iteration_callback(cls, conn, dom, iteration, opaque):
-        pass
+    def guest_event_migration_iteration_callback(cls, conn, guest, iteration, opaque):
+        migrate_info = dict()
+        migrate_info['type'], migrate_info['time_elapsed'], migrate_info['time_remaining'], \
+            migrate_info['data_total'], migrate_info['data_processed'], migrate_info['data_remaining'], \
+            migrate_info['mem_total'], migrate_info['mem_processed'], migrate_info['mem_remaining'], \
+            migrate_info['file_total'], migrate_info['file_processed'], migrate_info['file_remaining'] = \
+            guest.jobInfo()
+
+        guest_event_emit.migrating(uuid=guest.UUIDString(), migrating_info=migrate_info)
 

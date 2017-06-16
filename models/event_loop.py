@@ -455,4 +455,3 @@ def dom_detail_to_string(event, detail):
     return dom_event_strings[event][detail]
 
 
-vir_event_loop_poll_start()

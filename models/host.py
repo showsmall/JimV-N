@@ -16,7 +16,8 @@ from jimvn_exception import ConnFailed
 from initialize import config, logger, r, log_emit, guest_event_emit, response_emit, host_event_emit
 from guest import Guest
 from disk import Disk
-from models import GuestState
+from models.event_loop import vir_event_loop_poll_start
+from models.event_process import EventProcess
 from utils import Utils
 
 
@@ -34,12 +35,25 @@ class Host(object):
         self.guest_mapping_by_uuid = dict()
         self.hostname = ji.Common.get_hostname()
         self.node_id = uuid.getnode()
+        self.guest_callbacks = list()
 
     def init_conn(self):
         self.conn = libvirt.open()
 
         if self.conn is None:
             raise ConnFailed(u'打开连接失败 --> ' + sys.stderr)
+
+    def guest_event_register(self):
+        vir_event_loop_poll_start()
+        self.conn.domainEventRegister(EventProcess.guest_event_callback, None)
+        self.guest_callbacks.append(self.conn.domainEventRegisterAny(
+            None, libvirt.VIR_DOMAIN_EVENT_ID_MIGRATION_ITERATION,
+            EventProcess.guest_event_migration_iteration_callback, None))
+
+    def guest_event_deregister(self):
+        self.conn.domainEventDeregister(EventProcess.guest_event_callback)
+        for eid in self.guest_callbacks:
+            self.conn.domainEventDeregisterAny(eid)
 
     def refresh_guest_mapping(self):
         # 调用该方法的函数，都为单独的对象实例。即不存在多线程共用该方法，故而不用加多线程锁
@@ -402,97 +416,57 @@ class Host(object):
                 response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
                                       passback_parameters=msg.get('passback_parameters'))
 
-    # 使用时，创建独立的实例来避开 多线程 的问题
-    def guest_state_report_engine(self):
+    @staticmethod
+    def guest_state_report(guest):
 
-        guests_last_state = dict()
+        try:
+            _uuid = guest.UUIDString()
+            state, maxmem, mem, ncpu, cputime = guest.info()
+            # state 参考链接：
+            # http://libvirt.org/docs/libvirt-appdev-guide-python/en-US/html/libvirt_application_development_guide_using_python-Guest_Domains-Information-State.html
+            # http://stackoverflow.com/questions/4986076/alternative-to-virsh-libvirt
 
-        while True:
-            if Utils.exit_flag:
-                Utils.thread_counter -= 1
-                print 'Thread guest_state_report_engine say bye-bye'
-                return
+            log = u' '.join([u'域', guest.name(), u', UUID', _uuid, u'的状态改变为'])
 
-            try:
-                if config['debug']:
-                    print 'guest_state_report_engine alive: ' + ji.JITime.gmt(ts=time.time())
+            if state == libvirt.VIR_DOMAIN_RUNNING:
+                log += u' Running。'
+                guest_event_emit.running(uuid=_uuid)
 
-                time.sleep(2)
+            elif state == libvirt.VIR_DOMAIN_BLOCKED:
+                log += u' Blocked。'
+                guest_event_emit.blocked(uuid=_uuid)
 
-                self.refresh_guest_mapping()
+            elif state == libvirt.VIR_DOMAIN_PAUSED:
+                log += u' Paused。'
+                guest_event_emit.paused(uuid=_uuid)
 
-                for _uuid, domain in self.guest_mapping_by_uuid.items():
-                    # state 参考链接：
-                    # http://libvirt.org/docs/libvirt-appdev-guide-python/en-US/html/libvirt_application_development_guide_using_python-Guest_Domains-Information-State.html
-                    # http://stackoverflow.com/questions/4986076/alternative-to-virsh-libvirt
+            elif state == libvirt.VIR_DOMAIN_SHUTDOWN:
+                log += u' Shutdown。'
+                guest_event_emit.shutdown(uuid=_uuid)
 
-                    state, maxmem, mem, ncpu, cputime = domain.info()
-                    migrate_info = dict()
-                    try:
-                        migrate_info['type'], migrate_info['time_elapsed'], migrate_info['time_remaining'], \
-                            migrate_info['data_total'], migrate_info['data_processed'], migrate_info['data_remaining'], \
-                            migrate_info['mem_total'], migrate_info['mem_processed'], migrate_info['mem_remaining'], \
-                            migrate_info['file_total'], migrate_info['file_processed'], migrate_info['file_remaining'] = \
-                            domain.jobInfo()
+            elif state == libvirt.VIR_DOMAIN_SHUTOFF:
+                log += u' Shutoff。'
+                guest_event_emit.shutoff(uuid=_uuid)
 
-                    except libvirt.libvirtError as e:
-                        pass
+            elif state == libvirt.VIR_DOMAIN_CRASHED:
+                log += u' Crashed。'
+                guest_event_emit.crashed(uuid=_uuid)
 
-                    if migrate_info.get('type', 0) > 0:
-                        state = GuestState.migrating.value
+            elif state == libvirt.VIR_DOMAIN_PMSUSPENDED:
+                log += u' PM_Suspended。'
+                guest_event_emit.pm_suspended(uuid=_uuid)
 
-                    # 与 Guest 最后一次的状态做比较后，有差异的上报状态，没有差异的不做任何处理。
-                    if _uuid in guests_last_state and guests_last_state[_uuid] == state and \
-                            state != GuestState.migrating.value:
-                        continue
+            else:
+                log += u' NO_State。'
 
-                    guests_last_state[_uuid] = state
+                guest_event_emit.no_state(uuid=_uuid)
 
-                    log = u' '.join([u'域', domain.name(), u', UUID', _uuid, u'的状态改变为'])
+            logger.info(log)
+            log_emit.info(log)
 
-                    if state == GuestState.migrating.value:
-                        log += u' Migrating。'
-                        guest_event_emit.migrating(uuid=_uuid, migrating_info=migrate_info)
-
-                    elif state == libvirt.VIR_DOMAIN_RUNNING:
-                        log += u' Running。'
-                        guest_event_emit.running(uuid=_uuid)
-
-                    elif state == libvirt.VIR_DOMAIN_BLOCKED:
-                        log += u' Blocked。'
-                        guest_event_emit.blocked(uuid=_uuid)
-
-                    elif state == libvirt.VIR_DOMAIN_PAUSED:
-                        log += u' Paused。'
-                        guest_event_emit.paused(uuid=_uuid)
-
-                    elif state == libvirt.VIR_DOMAIN_SHUTDOWN:
-                        log += u' Shutdown。'
-                        guest_event_emit.shutdown(uuid=_uuid)
-
-                    elif state == libvirt.VIR_DOMAIN_SHUTOFF:
-                        log += u' Shutoff。'
-                        guest_event_emit.shutoff(uuid=_uuid)
-
-                    elif state == libvirt.VIR_DOMAIN_CRASHED:
-                        log += u' Crashed。'
-                        guest_event_emit.crashed(uuid=_uuid)
-
-                    elif state == libvirt.VIR_DOMAIN_PMSUSPENDED:
-                        log += u' PM_Suspended。'
-                        guest_event_emit.pm_suspended(uuid=_uuid)
-
-                    else:
-                        log += u' NO_State。'
-
-                        guest_event_emit.no_state(uuid=_uuid)
-
-                    logger.info(log)
-                    log_emit.info(log)
-
-            except Exception as e:
-                logger.error(e.message)
-                log_emit.error(e.message)
+        except Exception as e:
+            logger.error(e.message)
+            log_emit.error(e.message)
 
     # 使用时，创建独立的实例来避开 多线程 的问题
     def state_report_engine(self):
