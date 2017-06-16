@@ -6,6 +6,7 @@ import libvirt
 
 from models.event_loop import vir_event_loop_poll_start
 from models.initialize import guest_event_emit
+from models import Guest
 
 
 __author__ = 'James Iter'
@@ -31,8 +32,7 @@ class EventProcess(object):
             # 跳过已经不再本宿主机的 guest
             return
 
-        from models import Host
-        Host.guest_state_report(guest=guest)
+        Guest.guest_state_report(guest=guest)
 
         if event == libvirt.VIR_DOMAIN_EVENT_DEFINED:
             if detail == libvirt.VIR_DOMAIN_EVENT_DEFINED_ADDED:
@@ -197,14 +197,32 @@ class EventProcess(object):
         except libvirt.libvirtError as e:
             pass
 
+    @staticmethod
+    def guest_event_device_added_callback(conn, guest, dev, opaque):
+        Guest.update_xml(guest=guest)
+
+    @staticmethod
+    def guest_event_device_removed_callback(conn, guest, dev, opaque):
+        Guest.update_xml(guest=guest)
+
     @classmethod
     def guest_event_register(cls):
         vir_event_loop_poll_start()
         cls.conn = libvirt.open()
         cls.conn.domainEventRegister(cls.guest_event_callback, None)
+
+        # 参考地址：https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventID
         cls.guest_callbacks.append(cls.conn.domainEventRegisterAny(
             None, libvirt.VIR_DOMAIN_EVENT_ID_MIGRATION_ITERATION,
             cls.guest_event_migration_iteration_callback, None))
+
+        cls.guest_callbacks.append(cls.conn.domainEventRegisterAny(
+            None, libvirt.VIR_DOMAIN_EVENT_ID_DEVICE_ADDED,
+            cls.guest_event_device_added_callback, None))
+
+        cls.guest_callbacks.append(cls.conn.domainEventRegisterAny(
+            None, libvirt.VIR_DOMAIN_EVENT_ID_DEVICE_REMOVED,
+            cls.guest_event_device_added_callback, None))
 
     @classmethod
     def guest_event_deregister(cls):

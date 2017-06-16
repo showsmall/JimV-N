@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+
 import os
 
 import guestfs
 import libvirt
 from gluster import gfapi
 
-from initialize import logger, log_emit
+from initialize import logger, log_emit, guest_event_emit
 
 
 __author__ = 'James Iter'
@@ -101,5 +103,66 @@ class Guest(object):
             return False
 
         return True
+
+    @staticmethod
+    def guest_state_report(guest):
+
+        try:
+            _uuid = guest.UUIDString()
+            state, maxmem, mem, ncpu, cputime = guest.info()
+            # state 参考链接：
+            # http://libvirt.org/docs/libvirt-appdev-guide-python/en-US/html/libvirt_application_development_guide_using_python-Guest_Domains-Information-State.html
+            # http://stackoverflow.com/questions/4986076/alternative-to-virsh-libvirt
+
+            log = u' '.join([u'域', guest.name(), u', UUID', _uuid, u'的状态改变为'])
+
+            if state == libvirt.VIR_DOMAIN_RUNNING:
+                log += u' Running。'
+                guest_event_emit.running(uuid=_uuid)
+
+            elif state == libvirt.VIR_DOMAIN_BLOCKED:
+                log += u' Blocked。'
+                guest_event_emit.blocked(uuid=_uuid)
+
+            elif state == libvirt.VIR_DOMAIN_PAUSED:
+                log += u' Paused。'
+                guest_event_emit.paused(uuid=_uuid)
+
+            elif state == libvirt.VIR_DOMAIN_SHUTDOWN:
+                log += u' Shutdown。'
+                guest_event_emit.shutdown(uuid=_uuid)
+
+            elif state == libvirt.VIR_DOMAIN_SHUTOFF:
+                log += u' Shutoff。'
+                guest_event_emit.shutoff(uuid=_uuid)
+
+            elif state == libvirt.VIR_DOMAIN_CRASHED:
+                log += u' Crashed。'
+                guest_event_emit.crashed(uuid=_uuid)
+
+            elif state == libvirt.VIR_DOMAIN_PMSUSPENDED:
+                log += u' PM_Suspended。'
+                guest_event_emit.pm_suspended(uuid=_uuid)
+
+            else:
+                log += u' NO_State。'
+
+                guest_event_emit.no_state(uuid=_uuid)
+
+            logger.info(log)
+            log_emit.info(log)
+
+        except Exception as e:
+            logger.error(e.message)
+            log_emit.error(e.message)
+
+    @staticmethod
+    def update_xml(guest):
+        xml = guest.XMLDesc(flags=libvirt.VIR_DOMAIN_XML_SECURE)
+        if xml is None:
+            return
+
+        else:
+            guest_event_emit.update(uuid=guest.UUIDString(), xml=xml)
 
 
