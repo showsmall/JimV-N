@@ -7,9 +7,10 @@ import os
 import guestfs
 import libvirt
 from gluster import gfapi
+import xml.etree.ElementTree as ET
 
 from initialize import logger, log_emit, guest_event_emit
-
+from models.status import OperateRuleKind
 
 __author__ = 'James Iter'
 __date__ = '2017/3/1'
@@ -66,6 +67,39 @@ class Guest(object):
             self.g.write(item['path'], item['content'])
 
         self.g.sh('echo "{user}:{password}" | chpasswd'.format(user='root', password=self.password))
+
+        self.g.shutdown()
+        self.g.close()
+
+    def execute_boot_jobs(self, guest=None, boot_jobs=None):
+        if not isinstance(boot_jobs, list):
+            return
+
+        self.xml = guest.XMLDesc()
+        root = ET.fromstring(self.xml)
+
+        for dev in root.findall('devices/disk'):
+            filename = dev.find('source').get('name')
+            _format = dev.find('driver').attrib['type']
+            protocol = dev.find('source').get('protocol')
+            server = dev.find('source/host').get('name')
+            self.g.add_drive(filename=filename, format=_format, protocol=protocol, server=[server])
+
+        self.g.launch()
+        self.g.mount(self.g.inspect_os()[0], '/')
+
+        for boot_job in boot_jobs:
+            if boot_job['kind'] == OperateRuleKind.cmd.value:
+                self.g.sh(boot_job['command'])
+
+            elif boot_job['kind'] == OperateRuleKind.write_file.value:
+                self.g.write(boot_job['path'], boot_job['content'])
+
+            elif boot_job['kind'] == OperateRuleKind.append_file.value:
+                self.g.write_append(boot_job['path'], boot_job['content'])
+
+            else:
+                continue
 
         self.g.shutdown()
         self.g.close()

@@ -266,13 +266,18 @@ class Host(object):
                                               passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'boot':
-                    if self.guest.create() == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                    if not self.guest.isActive():
 
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                        guest = Guest()
+                        guest.execute_boot_jobs(guest=self.guest, boot_jobs=msg['boot_jobs'])
+
+                        if self.guest.create() == 0:
+                            response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                                  passback_parameters=msg.get('passback_parameters'))
+
+                        else:
+                            response_emit.failure(action=msg['action'], uuid=msg['uuid'],
+                                                  passback_parameters=msg.get('passback_parameters'))
 
                 elif msg['action'] == 'suspend':
                     if self.guest.suspend() == 0:

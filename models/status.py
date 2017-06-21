@@ -50,3 +50,10 @@ class ResponseState(IntEnum):
     success = True
     failure = False
 
+
+class OperateRuleKind(IntEnum):
+    cmd = 0
+    write_file = 1
+    append_file = 2
+
+
