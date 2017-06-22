@@ -227,7 +227,11 @@ class Host(object):
                     continue
 
                 self.guest = self.guest_mapping_by_uuid[msg['uuid']]
-                assert isinstance(self.guest, libvirt.virDomain)
+                if not isinstance(self.guest, libvirt.virDomain):
+                    log = u' '.join([u'uuid', msg['uuid'], u'已不存在于', self.hostname, u'在宿主机中。'])
+                    logger.warning(log)
+                    log_emit.warn(log)
+                    continue
 
                 if msg['action'] == 'reboot':
                     if self.guest.reboot() == 0:
@@ -430,4 +434,11 @@ class Host(object):
             except Exception as e:
                 logger.error(e.message)
                 log_emit.error(e.message)
+
+    def refresh_guest_state(self):
+        self.refresh_guest_mapping()
+
+        for domain in self.guest_mapping_by_uuid.values():
+            Guest.guest_state_report(domain)
+
 

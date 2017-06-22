@@ -28,7 +28,7 @@ class EventProcess(object):
     @classmethod
     def guest_event_callback(cls, conn, guest, event, detail, opaque):
 
-        if guest.ID() == -1:
+        if not isinstance(guest, libvirt.virDomain):
             # 跳过已经不再本宿主机的 guest
             return
 

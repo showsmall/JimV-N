@@ -73,7 +73,7 @@ class Guest(object):
 
     def execute_boot_jobs(self, guest=None, boot_jobs=None):
         if not isinstance(boot_jobs, list):
-            return
+            raise
 
         self.xml = guest.XMLDesc()
         root = ET.fromstring(self.xml)
@@ -103,6 +103,8 @@ class Guest(object):
 
         self.g.shutdown()
         self.g.close()
+
+        return True
 
     def define_by_xml(self, conn=None):
         try:
