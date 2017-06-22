@@ -97,8 +97,7 @@ class Host(object):
                 if msg['action'] == 'create_guest':
 
                     self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
-                                       template_path=msg['template_path'], disk=msg['disk'],
-                                       password=msg['password'], writes=msg['writes'], xml=msg['xml'])
+                                       template_path=msg['template_path'], disk=msg['disk'], xml=msg['xml'])
                     if Guest.gf is None:
                         Guest.glusterfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
@@ -113,9 +112,6 @@ class Host(object):
                                               passback_parameters=msg.get('passback_parameters'))
                         continue
 
-                    # 由该线程最顶层的异常捕获机制，处理其抛出的异常
-                    self.guest.init_config()
-
                     if not self.guest.define_by_xml(conn=self.conn):
                         response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
                                               passback_parameters=msg.get('passback_parameters'))
@@ -126,6 +122,10 @@ class Host(object):
 
                     disk_info = Disk.disk_info(glusterfs_volume=self.guest.glusterfs_volume,
                                                image_path=self.guest.system_image_path)
+
+                    # 由该线程最顶层的异常捕获机制，处理其抛出的异常
+                    self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
+                                                 boot_jobs=msg['boot_jobs'])
 
                     response_emit.success(action=msg['action'], uuid=self.guest.uuid, data={'disk_info': disk_info},
                                           passback_parameters=msg.get('passback_parameters'))

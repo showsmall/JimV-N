@@ -57,20 +57,6 @@ class Guest(object):
 
         return True
 
-    def init_config(self):
-        self.g.add_drive(filename=self.glusterfs_volume + '/' + self.system_image_path, format=self.disk['format'],
-                         protocol='gluster', server=['127.0.0.1'])
-        self.g.launch()
-        self.g.mount(self.g.inspect_os()[0], '/')
-
-        for item in self.writes:
-            self.g.write(item['path'], item['content'])
-
-        self.g.sh('echo "{user}:{password}" | chpasswd'.format(user='root', password=self.password))
-
-        self.g.shutdown()
-        self.g.close()
-
     def execute_boot_jobs(self, guest=None, boot_jobs=None):
         if not isinstance(boot_jobs, list):
             raise
