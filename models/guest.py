@@ -75,6 +75,9 @@ class Guest(object):
         if not isinstance(boot_jobs, list):
             raise
 
+        if boot_jobs.__len__() < 1:
+            return True
+
         self.xml = guest.XMLDesc()
         root = ET.fromstring(self.xml)
 
