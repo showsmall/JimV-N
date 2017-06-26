@@ -331,7 +331,7 @@ class Host(object):
                         raise KeyError(log)
 
                     # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
-                    msg['size'] = msg['size'] * 1024 * 1024
+                    msg['size'] = int(msg['size']) * 1024 * 1024
 
                     if self.guest.blockResize(disk=msg['device_node'], size=msg['size']) == 0:
                         response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
