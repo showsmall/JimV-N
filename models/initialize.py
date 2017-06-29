@@ -11,8 +11,7 @@ import getopt
 import redis
 
 from jimvn_exception import PathNotExist
-from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit
-
+from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit, CollectionPerformanceEmit
 
 __author__ = 'James Iter'
 __date__ = '2017/3/12'
@@ -121,3 +120,6 @@ response_emit = ResponseEmit()
 response_emit.upstream_queue = config['upstream_queue']
 response_emit.r = r
 
+collection_performance_emit = CollectionPerformanceEmit()
+collection_performance_emit.upstream_queue = config['upstream_queue']
+collection_performance_emit.r = r

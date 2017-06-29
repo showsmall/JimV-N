@@ -7,7 +7,8 @@ from status import (
     GuestState,
     HostEvent,
     LogLevel,
-    ResponseState
+    ResponseState,
+    CollectionPerformanceDataKind
 )
 
 from initialize import (
@@ -38,6 +39,7 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 __all__ = [
-    'Init', 'Guest', 'Disk', 'Host', 'Utils', 'Emit', 'EmitKind', 'GuestState', 'HostEvent', 'LogLevel', 'ResponseState'
+    'Init', 'Guest', 'Disk', 'Host', 'Utils', 'Emit', 'EmitKind', 'GuestState', 'HostEvent', 'LogLevel',
+    'ResponseState', 'CollectionPerformanceDataKind'
 ]
 

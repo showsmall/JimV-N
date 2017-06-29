@@ -6,7 +6,7 @@ import commands
 import jimit as ji
 import json
 
-from models import LogLevel, EmitKind, GuestState, ResponseState, HostEvent
+from models import LogLevel, EmitKind, GuestState, ResponseState, HostEvent, CollectionPerformanceDataKind
 
 
 __author__ = 'James Iter'
@@ -146,4 +146,21 @@ class ResponseEmit(Emit):
         return self.emit2(_type=ResponseState.failure.value, action=action, uuid=uuid, data=data,
                           passback_parameters=passback_parameters)
 
+
+class CollectionPerformanceEmit(Emit):
+    def __init__(self):
+        super(CollectionPerformanceEmit, self).__init__()
+
+    def emit2(self, _type=None, data=None):
+        return self.emit(_kind=EmitKind.collection_performance.value, _type=_type,
+                         message={'data': data})
+
+    def cpu_memory(self, data=None):
+        return self.emit2(_type=CollectionPerformanceDataKind.cpu_memory.value, data=data)
+
+    def traffic(self, data=None):
+        return self.emit2(_type=CollectionPerformanceDataKind.traffic.value, data=data)
+
+    def disk_io(self, data=None):
+        return self.emit2(_type=CollectionPerformanceDataKind.disk_io.value, data=data)
 

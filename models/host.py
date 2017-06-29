@@ -13,7 +13,7 @@ import uuid
 
 from jimvn_exception import ConnFailed
 
-from initialize import config, logger, r, log_emit, response_emit, host_event_emit
+from initialize import config, logger, r, log_emit, response_emit, host_event_emit, collection_performance_emit
 from guest import Guest
 from disk import Disk
 from utils import Utils
@@ -438,7 +438,56 @@ class Host(object):
     def refresh_guest_state(self):
         self.refresh_guest_mapping()
 
-        for domain in self.guest_mapping_by_uuid.values():
-            Guest.guest_state_report(domain)
+        for guest in self.guest_mapping_by_uuid.values():
+            Guest.guest_state_report(guest)
+
+    def collection_performance_process_engine(self):
+        interval = 60
+
+        last_cpu_time = dict()
+
+        self.refresh_guest_mapping()
+
+        for _uuid, guest in self.guest_mapping_by_uuid.items():
+            guest.setMemoryStatsPeriod(period=interval)
+
+        while True:
+            if Utils.exit_flag:
+                Utils.thread_counter -= 1
+                print 'Thread collection_performance_process_engine say bye-bye'
+                return
+
+            time.sleep(1)
+
+            if ji.Common.ts() % interval != 0:
+                continue
+
+            self.refresh_guest_mapping()
+
+            data = list()
+
+            for _uuid, guest in self.guest_mapping_by_uuid.items():
+
+                memory_state = guest.memoryStats()
+                cpu_time2 = guest.getCPUStats(True)[0]['cpu_time']
+
+                cpu_load = 0
+                # 计算 cpu_load 的公式 (cpu_time2 - cpu_time1) / interval_N / 1000**3.(nanoseconds to seconds) * 100(percent)
+                if _uuid in last_cpu_time:
+                    cpu_load = (cpu_time2 - last_cpu_time[_uuid]) / interval / 1000**3. * 100
+
+                last_cpu_time[_uuid] = cpu_time2
+
+                cpu_memory = {
+                    'guest_uuid': _uuid,
+                    'cpu_load': cpu_load,
+                    'memory_available': memory_state['available'],
+                    'memory_unused': memory_state['unused']
+                }
+
+                data.append(cpu_memory)
+
+            collection_performance_emit.cpu_memory(data=data)
+
 
 
