@@ -443,13 +443,9 @@ class Host(object):
 
     def collection_performance_process_engine(self):
         interval = 60
-
         last_cpu_time = dict()
-
-        self.refresh_guest_mapping()
-
-        for _uuid, guest in self.guest_mapping_by_uuid.items():
-            guest.setMemoryStatsPeriod(period=interval)
+        last_traffic = dict()
+        last_disk_io = dict()
 
         while True:
             if Utils.exit_flag:
@@ -462,32 +458,163 @@ class Host(object):
             if ji.Common.ts() % interval != 0:
                 continue
 
-            self.refresh_guest_mapping()
+            # 垃圾回收
+            for k, v in last_cpu_time.items():
+                if (ji.Common.ts() - v['timestamp']) > interval * 2:
+                    del last_traffic[k]
 
-            data = list()
+            for k, v in last_traffic.items():
+                if (ji.Common.ts() - v['timestamp']) > interval * 2:
+                    del last_traffic[k]
 
-            for _uuid, guest in self.guest_mapping_by_uuid.items():
+            for k, v in last_disk_io.items():
+                if (ji.Common.ts() - v['timestamp']) > interval * 2:
+                    del last_traffic[k]
 
-                memory_state = guest.memoryStats()
-                cpu_time2 = guest.getCPUStats(True)[0]['cpu_time']
+            try:
+                self.refresh_guest_mapping()
 
-                cpu_load = 0
-                # 计算 cpu_load 的公式 (cpu_time2 - cpu_time1) / interval_N / 1000**3.(nanoseconds to seconds) * 100(percent)
-                if _uuid in last_cpu_time:
-                    cpu_load = (cpu_time2 - last_cpu_time[_uuid]) / interval / 1000**3. * 100
+                data = list()
 
-                last_cpu_time[_uuid] = cpu_time2
+                for _uuid, guest in self.guest_mapping_by_uuid.items():
 
-                cpu_memory = {
-                    'guest_uuid': _uuid,
-                    'cpu_load': cpu_load,
-                    'memory_available': memory_state['available'],
-                    'memory_unused': memory_state['unused']
-                }
+                    if not guest.isActive():
+                        continue
 
-                data.append(cpu_memory)
+                    memory_state = guest.memoryStats()
 
-            collection_performance_emit.cpu_memory(data=data)
+                    if 'available' not in memory_state:
+                        guest.setMemoryStatsPeriod(period=interval)
+                        memory_state = guest.memoryStats()
 
+                    cpu_time2 = guest.getCPUStats(True)[0]['cpu_time']
 
+                    cpu_memory = dict()
+
+                    if _uuid in last_cpu_time:
+                        cpu_load = (cpu_time2 - last_cpu_time[_uuid]['cpu_time']) / interval / 1000**3. * 100
+                        # 计算 cpu_load 的公式：
+                        # (cpu_time2 - cpu_time1) / interval_N / 1000**3.(nanoseconds to seconds) * 100(percent)
+                        # cpu_time == user_time + system_time + guest_time
+                        #
+                        # 参考链接：
+                        # https://libvirt.org/html/libvirt-libvirt-domain.html#VIR_DOMAIN_STATS_CPU_TOTAL
+                        # https://stackoverflow.com/questions/40468370/what-does-cpu-time-represent-exactly-in-libvirt
+                        cpu_memory = {
+                            'guest_uuid': _uuid,
+                            'cpu_load': cpu_load,
+                            'memory_available': memory_state['available'],
+                            'memory_unused': memory_state['unused']
+                        }
+
+                    else:
+                        last_cpu_time[_uuid] = dict()
+
+                    last_cpu_time[_uuid]['cpu_time'] = cpu_time2
+                    last_cpu_time[_uuid]['timestamp'] = ji.Common.ts()
+
+                    if cpu_memory.__len__() > 0:
+                        data.append(cpu_memory)
+
+                if data.__len__() > 0:
+                    collection_performance_emit.cpu_memory(data=data)
+
+                data = list()
+
+                for _uuid, guest in self.guest_mapping_by_uuid.items():
+
+                    if not guest.isActive():
+                        continue
+
+                    root = ET.fromstring(guest.XMLDesc())
+
+                    for interface in root.findall('devices/interface'):
+                        dev = interface.find('target').get('dev')
+                        name = interface.find('alias').get('name')
+                        interface_state = guest.interfaceStats(dev)
+
+                        interface_id = '_'.join([_uuid, dev])
+
+                        traffic = dict()
+
+                        if interface_id in last_traffic:
+
+                            traffic = {
+                                'guest_uuid': _uuid,
+                                'name': name,
+                                'rx_bytes': (interface_state[0] - last_traffic[interface_id]['rx_bytes']) / interval,
+                                'rx_packets':
+                                    (interface_state[1] - last_traffic[interface_id]['rx_packets']) / interval,
+                                'rx_errs': interface_state[2],
+                                'rx_drop': interface_state[3],
+                                'tx_bytes': (interface_state[4] - last_traffic[interface_id]['tx_bytes']) / interval,
+                                'tx_packets':
+                                    (interface_state[5] - last_traffic[interface_id]['tx_packets']) / interval,
+                                'tx_errs': interface_state[6],
+                                'tx_drop': interface_state[7]
+                            }
+
+                        else:
+                            last_traffic[interface_id] = dict()
+
+                        last_traffic[interface_id]['rx_bytes'] = interface_state[0]
+                        last_traffic[interface_id]['rx_packets'] = interface_state[1]
+                        last_traffic[interface_id]['tx_bytes'] = interface_state[4]
+                        last_traffic[interface_id]['tx_packets'] = interface_state[5]
+                        last_traffic[interface_id]['timestamp'] = ji.Common.ts()
+
+                        if traffic.__len__() > 0:
+                            data.append(traffic)
+
+                if data.__len__() > 0:
+                    collection_performance_emit.traffic(data=data)
+
+                data = list()
+
+                for _uuid, guest in self.guest_mapping_by_uuid.items():
+
+                    if not guest.isActive():
+                        continue
+
+                    root = ET.fromstring(guest.XMLDesc())
+
+                    for disk in root.findall('devices/disk'):
+                        dev = disk.find('target').get('dev')
+                        dev_path = disk.find('source').get('name')
+                        if dev_path is None:
+                            continue
+
+                        disk_uuid = dev_path.split('/')[-1].split('.')[0]
+                        disk_state = guest.blockStats(dev)
+
+                        disk_io = dict()
+
+                        if disk_uuid in last_disk_io:
+
+                            disk_io = {
+                                'disk_uuid': disk_uuid,
+                                'rd_req': (disk_state[0] - last_disk_io[disk_uuid]['rd_req']) / interval,
+                                'rd_bytes': (disk_state[1] - last_disk_io[disk_uuid]['rd_bytes']) / interval,
+                                'wr_req': (disk_state[2] - last_disk_io[disk_uuid]['wr_req']) / interval,
+                                'wr_bytes': (disk_state[3] - last_disk_io[disk_uuid]['wr_bytes']) / interval
+                            }
+
+                        else:
+                            last_disk_io[disk_uuid] = dict()
+
+                        last_disk_io[disk_uuid]['rd_req'] = disk_state[0]
+                        last_disk_io[disk_uuid]['rd_bytes'] = disk_state[1]
+                        last_disk_io[disk_uuid]['wr_req'] = disk_state[2]
+                        last_disk_io[disk_uuid]['wr_bytes'] = disk_state[3]
+                        last_disk_io[disk_uuid]['timestamp'] = ji.Common.ts()
+
+                        if disk_io.__len__() > 0:
+                            data.append(disk_io)
+
+                if data.__len__() > 0:
+                    collection_performance_emit.disk_io(data=data)
+
+            except Exception as e:
+                logger.error(e.message)
+                log_emit.error(e.message)
 
