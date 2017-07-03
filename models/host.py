@@ -503,7 +503,7 @@ class Host(object):
                         # https://stackoverflow.com/questions/40468370/what-does-cpu-time-represent-exactly-in-libvirt
                         cpu_memory = {
                             'guest_uuid': _uuid,
-                            'cpu_load': cpu_load,
+                            'cpu_load': cpu_load if cpu_load <= 100 else 100,
                             'memory_available': memory_state['available'],
                             'memory_unused': memory_state['unused']
                         }
