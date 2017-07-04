@@ -488,14 +488,17 @@ class Host(object):
                         guest.setMemoryStatsPeriod(period=interval)
                         memory_state = guest.memoryStats()
 
+                    _, _, _, cpu_count, _ = guest.info()
                     cpu_time2 = guest.getCPUStats(True)[0]['cpu_time']
 
                     cpu_memory = dict()
 
                     if _uuid in last_cpu_time:
-                        cpu_load = (cpu_time2 - last_cpu_time[_uuid]['cpu_time']) / interval / 1000**3. * 100
+                        cpu_load = (cpu_time2 - last_cpu_time[_uuid]['cpu_time']) / interval / 1000**3. * 100 / \
+                                   cpu_count
                         # 计算 cpu_load 的公式：
-                        # (cpu_time2 - cpu_time1) / interval_N / 1000**3.(nanoseconds to seconds) * 100(percent)
+                        # (cpu_time2 - cpu_time1) / interval_N / 1000**3.(nanoseconds to seconds) * 100(percent) /
+                        # cpu_count
                         # cpu_time == user_time + system_time + guest_time
                         #
                         # 参考链接：
