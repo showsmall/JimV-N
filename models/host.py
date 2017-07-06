@@ -195,13 +195,24 @@ class Host(object):
 
             try:
                 msg = ps.get_message(timeout=1)
+
                 if config['debug']:
                     print 'guest_operate_engine alive: ' + ji.JITime.gmt(ts=time.time())
+
                 if msg is None or 'data' not in msg or not isinstance(msg['data'], basestring):
                     continue
 
                 try:
                     msg = json.loads(msg['data'])
+
+                    if msg['action'] == 'pong':
+                        continue
+
+                    if msg['action'] == 'ping':
+                        # 通过 ping pong 来刷存在感。因为经过实际测试发现，当订阅频道长时间没有数据来往，那么订阅者会被自动退出。
+                        r.publish(config['instruction_channel'], message=json.dumps({'action': 'pong'}))
+                        continue
+
                 except ValueError as e:
                     logger.error(e.message)
                     log_emit.error(e.message)
