@@ -473,7 +473,7 @@ class Host(object):
                 # 一小时做一次 垃圾回收 操作
                 for k, v in last_cpu_time.items():
                     if (ji.Common.ts() - v['timestamp']) > interval * 2:
-                        del last_traffic[k]
+                        del last_cpu_time[k]
 
                 for k, v in last_traffic.items():
                     if (ji.Common.ts() - v['timestamp']) > interval * 2:
@@ -481,7 +481,7 @@ class Host(object):
 
                 for k, v in last_disk_io.items():
                     if (ji.Common.ts() - v['timestamp']) > interval * 2:
-                        del last_traffic[k]
+                        del last_disk_io[k]
 
             try:
                 self.refresh_guest_mapping()
