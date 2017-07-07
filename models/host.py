@@ -469,7 +469,7 @@ class Host(object):
             if ji.Common.ts() % interval != 0:
                 continue
 
-            if ji.Common.ts() % 3600 != 0:
+            if ji.Common.ts() % 3600 == 0:
                 # 一小时做一次 垃圾回收 操作
                 for k, v in last_cpu_time.items():
                     if (ji.Common.ts() - v['timestamp']) > interval * 2:
