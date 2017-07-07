@@ -10,6 +10,7 @@ import sys
 import json
 import getopt
 import redis
+import jimit as ji
 
 from jimvn_exception import PathNotExist
 from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit, CollectionPerformanceEmit
@@ -97,6 +98,7 @@ class Init(object):
                                    db=cls.config.get('redis_dbid', 0), password=cls.config.get('redis_password', ''),
                                    decode_responses=True)
 
+        _r.client_setname(ji.Common.get_hostname())
         return _r
 
 
