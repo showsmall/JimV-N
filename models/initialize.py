@@ -3,6 +3,7 @@
 
 
 import logging
+import multiprocessing
 from logging.handlers import TimedRotatingFileHandler
 import os
 import sys
@@ -12,6 +13,7 @@ import redis
 
 from jimvn_exception import PathNotExist
 from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit, CollectionPerformanceEmit
+
 
 __author__ = 'James Iter'
 __date__ = '2017/3/12'
@@ -102,6 +104,8 @@ config = Init.load_config()
 logger = Init.init_logger()
 r = Init.redis_init_conn()
 assert isinstance(r, redis.StrictRedis)
+
+host_cpu_count = multiprocessing.cpu_count()
 
 # 创建 JimV-N 向 JimV-C 推送事件消息的发射器
 log_emit = LogEmit()

@@ -13,7 +13,8 @@ import uuid
 
 from jimvn_exception import ConnFailed
 
-from initialize import config, logger, r, log_emit, response_emit, host_event_emit, collection_performance_emit
+from initialize import config, logger, r, log_emit, response_emit, host_event_emit, collection_performance_emit, \
+    host_cpu_count
 from guest import Guest
 from disk import Disk
 from utils import Utils
@@ -80,7 +81,7 @@ class Host(object):
                     print 'downstream_queue_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
                 # 大于 0.6 的系统将不再被分配创建虚拟机
-                if load_avg > 0.6:
+                if load_avg > host_cpu_count * 0.6:
                     continue
 
                 msg = r.lpop(config['downstream_queue'])
