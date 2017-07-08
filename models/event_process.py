@@ -32,6 +32,10 @@ class EventProcess(object):
             # 跳过已经不再本宿主机的 guest
             return
 
+        if event == libvirt.VIR_DOMAIN_EVENT_STOPPED and detail == libvirt.VIR_DOMAIN_EVENT_STOPPED_MIGRATED:
+            # Guest 从本宿主机迁出完成后不做状态通知
+            return
+
         Guest.guest_state_report(guest=guest)
 
         if event == libvirt.VIR_DOMAIN_EVENT_DEFINED:
@@ -222,7 +226,7 @@ class EventProcess(object):
 
         cls.guest_callbacks.append(cls.conn.domainEventRegisterAny(
             None, libvirt.VIR_DOMAIN_EVENT_ID_DEVICE_REMOVED,
-            cls.guest_event_device_added_callback, None))
+            cls.guest_event_device_removed_callback, None))
 
     @classmethod
     def guest_event_deregister(cls):
