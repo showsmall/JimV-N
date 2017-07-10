@@ -465,6 +465,9 @@ class Host(object):
                 print 'Thread collection_performance_process_engine say bye-bye'
                 return
 
+            if config['debug']:
+                print 'collection_performance_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
+
             time.sleep(1)
 
             try:
