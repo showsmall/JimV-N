@@ -637,9 +637,9 @@ class Host(object):
                     if data.__len__() > 0:
                         collection_performance_emit.disk_io(data=data)
 
-                except Exception as e:
-                    logger.error(e.message)
-                    log_emit.error(e.message)
+                except:
+                    logger.error(traceback.format_exc())
+                    log_emit.error(traceback.format_exc())
 
         except:
             logger.error(traceback.format_exc())
