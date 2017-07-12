@@ -2,9 +2,10 @@
 # -*- coding: utf-8 -*-
 
 
+import threading
 import traceback
-import thread
 import signal
+
 import time
 
 from models.event_process import EventProcess
@@ -24,38 +25,50 @@ if __name__ == '__main__':
     # noinspection PyBroadException
     try:
 
+        EventProcess.guest_event_register()
+
         signal.signal(signal.SIGTERM, Utils.signal_handle)
         signal.signal(signal.SIGINT, Utils.signal_handle)
 
-        EventProcess.guest_event_register()
+        threads = []
 
         host_use_for_downstream_queue_process_engine = Host()
         host_use_for_downstream_queue_process_engine.init_conn()
-        thread.start_new_thread(host_use_for_downstream_queue_process_engine.downstream_queue_process_engine, ())
-        Utils.thread_counter += 1
+        t_ = threading.Thread(target=host_use_for_downstream_queue_process_engine.downstream_queue_process_engine,
+                              args=())
+        threads.append(t_)
 
         host_use_for_guest_operate_engine = Host()
         host_use_for_guest_operate_engine.init_conn()
-        thread.start_new_thread(host_use_for_guest_operate_engine.guest_operate_engine, ())
-        Utils.thread_counter += 1
+        t_ = threading.Thread(target=host_use_for_guest_operate_engine.guest_operate_engine, args=())
+        threads.append(t_)
 
         host_use_for_host_state_report_engine = Host()
         host_use_for_host_state_report_engine.init_conn()
-        thread.start_new_thread(host_use_for_host_state_report_engine.state_report_engine, ())
-        Utils.thread_counter += 1
+        t_ = threading.Thread(target=host_use_for_host_state_report_engine.state_report_engine, args=())
+        threads.append(t_)
 
         host_use_for_collection_performance_process_engine = Host()
         host_use_for_collection_performance_process_engine.init_conn()
-        thread.start_new_thread(
-            host_use_for_collection_performance_process_engine.collection_performance_process_engine, ())
-        Utils.thread_counter += 1
+        t_ = threading.Thread(
+            target=host_use_for_collection_performance_process_engine.collection_performance_process_engine, args=())
+        threads.append(t_)
 
         host_use_for_host_state_report_engine.refresh_guest_state()
 
-        while Utils.thread_counter > 0:
+        for t in threads:
+            t.start()
+
+        while True:
+            if Utils.exit_flag:
+                # 主线程即将结束
+                EventProcess.guest_event_deregister()
+                break
             time.sleep(1)
 
-        EventProcess.guest_event_deregister()
+        # 等待子线程结束
+        for t in threads:
+            t.join()
 
         print 'Main say bye-bye!'
 

@@ -70,13 +70,11 @@ class Host(object):
     def downstream_queue_process_engine(self):
         while True:
             if Utils.exit_flag:
-                Utils.thread_counter -= 1
                 print 'Thread downstream_queue_process_engine say bye-bye'
                 return
 
             msg = dict()
 
-            # noinspection PyBroadException
             try:
                 # 清理上个周期弄脏的现场
                 self.clear_scene()
@@ -197,7 +195,6 @@ class Host(object):
 
         while True:
             if Utils.exit_flag:
-                Utils.thread_counter -= 1
                 print 'Thread guest_operate_engine say bye-bye'
                 return
 
@@ -439,7 +436,6 @@ class Host(object):
 
         while True:
             if Utils.exit_flag:
-                Utils.thread_counter -= 1
                 print 'Thread state_report_engine say bye-bye'
                 return
 
@@ -615,7 +611,6 @@ class Host(object):
 
         while True:
             if Utils.exit_flag:
-                Utils.thread_counter -= 1
                 print 'Thread collection_performance_process_engine say bye-bye'
                 return
 
