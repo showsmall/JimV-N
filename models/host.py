@@ -16,7 +16,7 @@ import uuid
 from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, log_emit, response_emit, host_event_emit, collection_performance_emit, \
-    host_cpu_count
+    host_cpu_count, thread_status
 from guest import Guest
 from disk import Disk
 from utils import Utils
@@ -73,8 +73,10 @@ class Host(object):
                 print 'Thread downstream_queue_process_engine say bye-bye'
                 return
 
+            thread_status['downstream_queue_process_engine'] = ji.JITime.now_date_time()
             msg = dict()
 
+            # noinspection PyBroadException
             try:
                 # 清理上个周期弄脏的现场
                 self.clear_scene()
@@ -197,6 +199,8 @@ class Host(object):
             if Utils.exit_flag:
                 print 'Thread guest_operate_engine say bye-bye'
                 return
+
+            thread_status['guest_operate_engine'] = ji.JITime.now_date_time()
 
             # noinspection PyBroadException
             try:
@@ -439,6 +443,8 @@ class Host(object):
                 print 'Thread state_report_engine say bye-bye'
                 return
 
+            thread_status['state_report_engine'] = ji.JITime.now_date_time()
+
             # noinspection PyBroadException
             try:
                 if config['debug']:
@@ -617,6 +623,7 @@ class Host(object):
             if config['debug']:
                 print 'collection_performance_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
+            thread_status['collection_performance_process_engine'] = ji.JITime.now_date_time()
             time.sleep(1)
 
             # noinspection PyBroadException

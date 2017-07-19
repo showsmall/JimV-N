@@ -9,7 +9,7 @@ import signal
 import time
 
 from models.event_process import EventProcess
-from models.initialize import logger
+from models.initialize import logger, thread_status
 from models import Host
 from models import Utils
 
@@ -53,7 +53,8 @@ if __name__ == '__main__':
             host_use_for_collection_performance_process_engine = Host()
             host_use_for_collection_performance_process_engine.init_conn()
             t_ = threading.Thread(
-                target=host_use_for_collection_performance_process_engine.collection_performance_process_engine, args=())
+                target=host_use_for_collection_performance_process_engine.collection_performance_process_engine,
+                args=())
             threads.append(t_)
 
             host_use_for_host_state_report_engine.refresh_guest_state()
@@ -61,14 +62,17 @@ if __name__ == '__main__':
             for t in threads:
                 t.start()
 
-            while True:
-                if Utils.exit_flag:
-                    # 主线程即将结束
-                    EventProcess.guest_event_deregister()
-                    break
-                time.sleep(1)
         except:
             logger.error(traceback.format_exc())
+
+        while True:
+            if Utils.exit_flag:
+                # 主线程即将结束
+                EventProcess.guest_event_deregister()
+                break
+
+            print thread_status
+            time.sleep(1)
 
         # 等待子线程结束
         for t in threads:

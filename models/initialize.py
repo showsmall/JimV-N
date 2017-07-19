@@ -129,3 +129,6 @@ response_emit.r = r
 collection_performance_emit = CollectionPerformanceEmit()
 collection_performance_emit.upstream_queue = config['upstream_queue']
 collection_performance_emit.r = r
+
+thread_status = dict()
+
