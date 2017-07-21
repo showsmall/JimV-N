@@ -41,6 +41,7 @@ class Host(object):
         self.last_cpu_time = dict()
         self.last_traffic = dict()
         self.last_disk_io = dict()
+        self.ts = ji.Common.ts()
 
     def init_conn(self):
         self.conn = libvirt.open()
@@ -506,7 +507,7 @@ class Host(object):
                 self.last_cpu_time[_uuid] = dict()
 
             self.last_cpu_time[_uuid]['cpu_time'] = cpu_time2
-            self.last_cpu_time[_uuid]['timestamp'] = ji.Common.ts()
+            self.last_cpu_time[_uuid]['timestamp'] = self.ts
 
             if cpu_memory.__len__() > 0:
                 data.append(cpu_memory)
@@ -558,7 +559,7 @@ class Host(object):
                 self.last_traffic[interface_id]['rx_packets'] = interface_state[1]
                 self.last_traffic[interface_id]['tx_bytes'] = interface_state[4]
                 self.last_traffic[interface_id]['tx_packets'] = interface_state[5]
-                self.last_traffic[interface_id]['timestamp'] = ji.Common.ts()
+                self.last_traffic[interface_id]['timestamp'] = self.ts
 
                 if traffic.__len__() > 0:
                     data.append(traffic)
@@ -605,7 +606,7 @@ class Host(object):
                 self.last_disk_io[disk_uuid]['rd_bytes'] = disk_state[1]
                 self.last_disk_io[disk_uuid]['wr_req'] = disk_state[2]
                 self.last_disk_io[disk_uuid]['wr_bytes'] = disk_state[3]
-                self.last_disk_io[disk_uuid]['timestamp'] = ji.Common.ts()
+                self.last_disk_io[disk_uuid]['timestamp'] = self.ts
 
                 if disk_io.__len__() > 0:
                     data.append(disk_io)
@@ -625,25 +626,26 @@ class Host(object):
 
             thread_status['collection_performance_process_engine'] = ji.JITime.now_date_time()
             time.sleep(1)
+            self.ts = ji.Common.ts()
 
             # noinspection PyBroadException
             try:
 
-                if ji.Common.ts() % self.interval != 0:
+                if self.ts % self.interval != 0:
                     continue
 
-                if ji.Common.ts() % 3600 == 0:
+                if self.ts % 3600 == 0:
                     # 一小时做一次 垃圾回收 操作
                     for k, v in self.last_cpu_time.items():
-                        if (ji.Common.ts() - v['timestamp']) > self.interval * 2:
+                        if (self.ts - v['timestamp']) > self.interval * 2:
                             del self.last_cpu_time[k]
 
                     for k, v in self.last_traffic.items():
-                        if (ji.Common.ts() - v['timestamp']) > self.interval * 2:
+                        if (self.ts - v['timestamp']) > self.interval * 2:
                             del self.last_traffic[k]
 
                     for k, v in self.last_disk_io.items():
-                        if (ji.Common.ts() - v['timestamp']) > self.interval * 2:
+                        if (self.ts - v['timestamp']) > self.interval * 2:
                             del self.last_disk_io[k]
 
                 self.refresh_guest_mapping()
@@ -653,6 +655,8 @@ class Host(object):
                 self.disk_io_performance_report()
 
             except:
+                print traceback.format_exc()
                 logger.error(traceback.format_exc())
+                print 'fuck too!'
                 log_emit.error(traceback.format_exc())
 
