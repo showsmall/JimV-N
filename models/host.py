@@ -474,12 +474,6 @@ class Host(object):
             if not guest.isActive():
                 continue
 
-            memory_state = guest.memoryStats()
-
-            if 'available' not in memory_state:
-                guest.setMemoryStatsPeriod(period=self.interval)
-                memory_state = guest.memoryStats()
-
             _, _, _, cpu_count, _ = guest.info()
             cpu_time2 = guest.getCPUStats(True)[0]['cpu_time']
 
@@ -499,8 +493,8 @@ class Host(object):
                 cpu_memory = {
                     'guest_uuid': _uuid,
                     'cpu_load': cpu_load if cpu_load <= 100 else 100,
-                    'memory_available': memory_state['available'],
-                    'memory_unused': memory_state['unused']
+                    'memory_available': 0,
+                    'memory_unused': 0
                 }
 
             else:
@@ -657,6 +651,5 @@ class Host(object):
             except:
                 print traceback.format_exc()
                 logger.error(traceback.format_exc())
-                print 'fuck too!'
                 log_emit.error(traceback.format_exc())
 
