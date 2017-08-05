@@ -122,11 +122,13 @@ class HostEventEmit(Emit):
     def __init__(self):
         super(HostEventEmit, self).__init__()
 
-    def emit2(self, _type=None, node_id=None):
-        return self.emit(_kind=EmitKind.host_event.value, _type=_type, message={'node_id': node_id})
+    def emit2(self, _type=None, node_id=None, cpu=None, memory=None, interfaces=None, disks=None):
+        return self.emit(_kind=EmitKind.host_event.value, _type=_type, message={
+            'node_id': node_id, 'cpu': cpu, 'memory': memory, 'interfaces': interfaces, 'disks': disks})
 
-    def heartbeat(self, node_id):
-        return self.emit2(_type=HostEvent.heartbeat.value, node_id=node_id)
+    def heartbeat(self, node_id, cpu, memory, interfaces, disks):
+        return self.emit2(_type=HostEvent.heartbeat.value, node_id=node_id, cpu=cpu, memory=memory,
+                          interfaces=interfaces, disks=disks)
 
 
 class ResponseEmit(Emit):

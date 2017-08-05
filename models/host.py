@@ -13,6 +13,8 @@ import jimit as ji
 import xml.etree.ElementTree as ET
 import uuid
 
+import psutil
+
 from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, log_emit, response_emit, host_event_emit, collection_performance_emit, \
@@ -36,6 +38,10 @@ class Host(object):
         self.guest_mapping_by_uuid = dict()
         self.hostname = ji.Common.get_hostname()
         self.node_id = uuid.getnode()
+        self.cpu = psutil.cpu_count()
+        self.memory = psutil.virtual_memory().total
+        self.interfaces = dict()
+        self.disks = dict()
         self.guest_callbacks = list()
         self.interval = 60
         self.last_cpu_time = dict()
@@ -433,11 +439,38 @@ class Host(object):
                 response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
                                       passback_parameters=msg.get('passback_parameters'))
 
+    def update_interfaces(self):
+        self.interfaces.clear()
+        for nic_name, nic_s in psutil.net_if_addrs().items():
+            for nic in nic_s:
+                if nic.family == 2:
+                    for _nic in nic_s:
+                        if _nic.family == 2:
+                            self.interfaces[nic_name] = {'ip': _nic.address, 'netmask': _nic.netmask}
+
+                        if _nic.family == 17:
+                            self.interfaces[nic_name]['mac'] = _nic.address
+
+    def update_disks(self):
+        self.disks.clear()
+        for disk in psutil.disk_partitions(all=False):
+            disk_usage = psutil.disk_usage(disk.mountpoint)
+            self.disks[disk.mountpoint] = {'device': disk.device, 'real_device': disk.device, 'fstype': disk.fstype,
+                                           'opts': disk.opts, 'total': disk_usage.total, 'used': disk_usage.used,
+                                           'free': disk_usage.free, 'percent': disk_usage.percent}
+
+            if os.path.islink(disk.device):
+                self.disks[disk.mountpoint]['real_device'] = os.path.realpath(disk.device)
+
     # 使用时，创建独立的实例来避开 多线程 的问题
     def state_report_engine(self):
         """
         宿主机状态上报引擎
         """
+
+        # 首次启动时，做数据初始化
+        self.update_interfaces()
+        self.update_disks()
 
         while True:
             if Utils.exit_flag:
@@ -453,7 +486,13 @@ class Host(object):
 
                 time.sleep(2)
 
-                host_event_emit.heartbeat(node_id=self.node_id)
+                # 一分钟做一次更新
+                if ji.Common.ts() % 60 == 0:
+                    self.update_interfaces()
+                    self.update_disks()
+
+                host_event_emit.heartbeat(node_id=self.node_id, cpu=self.cpu, memory=self.memory,
+                                          interfaces=self.interfaces, disks=self.disks)
 
             except:
                 logger.error(traceback.format_exc())
