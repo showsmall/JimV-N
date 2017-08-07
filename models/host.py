@@ -18,7 +18,7 @@ import psutil
 from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, log_emit, response_emit, host_event_emit, collection_performance_emit, \
-    host_cpu_count, thread_status
+    host_cpu_count, thread_status, host_collection_performance_emit
 from guest import Guest
 from disk import Disk
 from utils import Utils
@@ -44,9 +44,12 @@ class Host(object):
         self.disks = dict()
         self.guest_callbacks = list()
         self.interval = 60
-        self.last_cpu_time = dict()
-        self.last_traffic = dict()
-        self.last_disk_io = dict()
+        self.last_host_cpu_time = dict()
+        self.last_host_traffic = dict()
+        self.last_host_disk_io = dict()
+        # self.last_guest_cpu_time = dict()
+        self.last_guest_traffic = dict()
+        self.last_guest_disk_io = dict()
         self.ts = ji.Common.ts()
 
     def init_conn(self):
@@ -518,8 +521,8 @@ class Host(object):
 
             cpu_memory = dict()
 
-            if _uuid in self.last_cpu_time:
-                cpu_load = (cpu_time2 - self.last_cpu_time[_uuid]['cpu_time']) / self.interval / 1000**3. * 100 / \
+            if _uuid in self.last_guest_cpu_time:
+                cpu_load = (cpu_time2 - self.last_guest_cpu_time[_uuid]['cpu_time']) / self.interval / 1000 ** 3. * 100 / \
                            cpu_count
                 # 计算 cpu_load 的公式：
                 # (cpu_time2 - cpu_time1) / interval_N / 1000**3.(nanoseconds to seconds) * 100(percent) /
@@ -537,10 +540,10 @@ class Host(object):
                 }
 
             else:
-                self.last_cpu_time[_uuid] = dict()
+                self.last_guest_cpu_time[_uuid] = dict()
 
-            self.last_cpu_time[_uuid]['cpu_time'] = cpu_time2
-            self.last_cpu_time[_uuid]['timestamp'] = self.ts
+            self.last_guest_cpu_time[_uuid]['cpu_time'] = cpu_time2
+            self.last_guest_cpu_time[_uuid]['timestamp'] = self.ts
 
             if cpu_memory.__len__() > 0:
                 data.append(cpu_memory)
@@ -568,31 +571,31 @@ class Host(object):
 
                 traffic = dict()
 
-                if interface_id in self.last_traffic:
+                if interface_id in self.last_guest_traffic:
 
                     traffic = {
                         'guest_uuid': _uuid,
                         'name': name,
-                        'rx_bytes': (interface_state[0] - self.last_traffic[interface_id]['rx_bytes']) / self.interval,
+                        'rx_bytes': (interface_state[0] - self.last_guest_traffic[interface_id]['rx_bytes']) / self.interval,
                         'rx_packets':
-                            (interface_state[1] - self.last_traffic[interface_id]['rx_packets']) / self.interval,
+                            (interface_state[1] - self.last_guest_traffic[interface_id]['rx_packets']) / self.interval,
                         'rx_errs': interface_state[2],
                         'rx_drop': interface_state[3],
-                        'tx_bytes': (interface_state[4] - self.last_traffic[interface_id]['tx_bytes']) / self.interval,
+                        'tx_bytes': (interface_state[4] - self.last_guest_traffic[interface_id]['tx_bytes']) / self.interval,
                         'tx_packets':
-                            (interface_state[5] - self.last_traffic[interface_id]['tx_packets']) / self.interval,
+                            (interface_state[5] - self.last_guest_traffic[interface_id]['tx_packets']) / self.interval,
                         'tx_errs': interface_state[6],
                         'tx_drop': interface_state[7]
                     }
 
                 else:
-                    self.last_traffic[interface_id] = dict()
+                    self.last_guest_traffic[interface_id] = dict()
 
-                self.last_traffic[interface_id]['rx_bytes'] = interface_state[0]
-                self.last_traffic[interface_id]['rx_packets'] = interface_state[1]
-                self.last_traffic[interface_id]['tx_bytes'] = interface_state[4]
-                self.last_traffic[interface_id]['tx_packets'] = interface_state[5]
-                self.last_traffic[interface_id]['timestamp'] = self.ts
+                self.last_guest_traffic[interface_id]['rx_bytes'] = interface_state[0]
+                self.last_guest_traffic[interface_id]['rx_packets'] = interface_state[1]
+                self.last_guest_traffic[interface_id]['tx_bytes'] = interface_state[4]
+                self.last_guest_traffic[interface_id]['tx_packets'] = interface_state[5]
+                self.last_guest_traffic[interface_id]['timestamp'] = self.ts
 
                 if traffic.__len__() > 0:
                     data.append(traffic)
@@ -622,24 +625,24 @@ class Host(object):
 
                 disk_io = dict()
 
-                if disk_uuid in self.last_disk_io:
+                if disk_uuid in self.last_guest_disk_io:
 
                     disk_io = {
                         'disk_uuid': disk_uuid,
-                        'rd_req': (disk_state[0] - self.last_disk_io[disk_uuid]['rd_req']) / self.interval,
-                        'rd_bytes': (disk_state[1] - self.last_disk_io[disk_uuid]['rd_bytes']) / self.interval,
-                        'wr_req': (disk_state[2] - self.last_disk_io[disk_uuid]['wr_req']) / self.interval,
-                        'wr_bytes': (disk_state[3] - self.last_disk_io[disk_uuid]['wr_bytes']) / self.interval
+                        'rd_req': (disk_state[0] - self.last_guest_disk_io[disk_uuid]['rd_req']) / self.interval,
+                        'rd_bytes': (disk_state[1] - self.last_guest_disk_io[disk_uuid]['rd_bytes']) / self.interval,
+                        'wr_req': (disk_state[2] - self.last_guest_disk_io[disk_uuid]['wr_req']) / self.interval,
+                        'wr_bytes': (disk_state[3] - self.last_guest_disk_io[disk_uuid]['wr_bytes']) / self.interval
                     }
 
                 else:
-                    self.last_disk_io[disk_uuid] = dict()
+                    self.last_guest_disk_io[disk_uuid] = dict()
 
-                self.last_disk_io[disk_uuid]['rd_req'] = disk_state[0]
-                self.last_disk_io[disk_uuid]['rd_bytes'] = disk_state[1]
-                self.last_disk_io[disk_uuid]['wr_req'] = disk_state[2]
-                self.last_disk_io[disk_uuid]['wr_bytes'] = disk_state[3]
-                self.last_disk_io[disk_uuid]['timestamp'] = self.ts
+                self.last_guest_disk_io[disk_uuid]['rd_req'] = disk_state[0]
+                self.last_guest_disk_io[disk_uuid]['rd_bytes'] = disk_state[1]
+                self.last_guest_disk_io[disk_uuid]['wr_req'] = disk_state[2]
+                self.last_guest_disk_io[disk_uuid]['wr_bytes'] = disk_state[3]
+                self.last_guest_disk_io[disk_uuid]['timestamp'] = self.ts
 
                 if disk_io.__len__() > 0:
                     data.append(disk_io)
@@ -669,17 +672,17 @@ class Host(object):
 
                 if self.ts % 3600 == 0:
                     # 一小时做一次 垃圾回收 操作
-                    for k, v in self.last_cpu_time.items():
+                    for k, v in self.last_guest_cpu_time.items():
                         if (self.ts - v['timestamp']) > self.interval * 2:
-                            del self.last_cpu_time[k]
+                            del self.last_guest_cpu_time[k]
 
-                    for k, v in self.last_traffic.items():
+                    for k, v in self.last_guest_traffic.items():
                         if (self.ts - v['timestamp']) > self.interval * 2:
-                            del self.last_traffic[k]
+                            del self.last_guest_traffic[k]
 
-                    for k, v in self.last_disk_io.items():
+                    for k, v in self.last_guest_disk_io.items():
                         if (self.ts - v['timestamp']) > self.interval * 2:
-                            del self.last_disk_io[k]
+                            del self.last_guest_disk_io[k]
 
                 self.refresh_guest_mapping()
 
@@ -691,4 +694,83 @@ class Host(object):
                 print traceback.format_exc()
                 logger.error(traceback.format_exc())
                 log_emit.error(traceback.format_exc())
+
+    def host_cpu_memory_performance_report(self):
+
+        cpu_memory = {
+            'node_id': self.node_id,
+            'cpu_load': psutil.cpu_percent(interval=None, percpu=False),
+            'memory_available': psutil.virtual_memory().available,
+        }
+
+        host_collection_performance_emit.cpu_memory(data=cpu_memory)
+
+    def host_traffic_performance_report(self):
+
+        data = list()
+        net_io = psutil.net_io_counters(pernic=True)
+
+        for nic_name in self.interfaces.keys():
+            nic = net_io.get(nic_name, None)
+            if nic is None:
+                continue
+
+            if nic_name in self.last_host_traffic:
+                traffic = {
+                    'node_id': self.node_id,
+                    'name': nic_name,
+                    'rx_bytes': (nic.bytes_recv - self.last_host_traffic[nic_name].bytes_recv) / self.interval,
+                    'rx_packets':
+                        (nic.packets_recv - self.last_host_traffic[nic_name].packets_recv) / self.interval,
+                    'rx_errs': (nic.errin - self.last_host_traffic[nic_name].errin),
+                    'rx_drop': (nic.dropin - self.last_host_traffic[nic_name].dropin),
+                    'tx_bytes': (nic.bytes_sent - self.last_host_traffic[nic_name].bytes_sent) / self.interval,
+                    'tx_packets':
+                        (nic.packets_sent - self.last_host_traffic[nic_name].packets_sent) / self.interval,
+                    'tx_errs': (nic.errout - self.last_host_traffic[nic_name].errout),
+                    'tx_drop': (nic.dropout - self.last_host_traffic[nic_name].dropout)
+                }
+            else:
+                self.last_host_traffic = dict()
+
+            self.last_host_traffic[nic_name] = nic
+
+            if traffic.__len__() > 0:
+                data.append(traffic)
+
+        if data.__len__() > 0:
+            host_collection_performance_emit.traffic(data=data)
+
+    def host_disk_io_performance_report(self):
+
+        data = list()
+        disk_io_counters = psutil.disk_io_counters(perdisk=True)
+
+        for mountpoint, disk in self.disks.items():
+            dev = os.path.basename(disk['real_device'])
+            if dev in disk_io_counters:
+                disk_io = {
+                    'node_id': self.node_id,
+                    'mountpoint': mountpoint,
+                    'used': psutil.disk_usage(mountpoint).used,
+                    'rd_req':
+                        (disk_io_counters[dev].read_count - self.last_host_disk_io[dev].read_count) / self.interval,
+                    'rd_bytes':
+                        (disk_io_counters[dev].read_bytes - self.last_host_disk_io[dev].read_bytes) / self.interval,
+                    'wr_req':
+                        (disk_io_counters[dev].write_count - self.last_host_disk_io[dev].write_count) / self.interval,
+                    'wr_bytes':
+                        (disk_io_counters[dev].write_bytes - self.last_host_disk_io[dev].write_bytes) / self.interval
+                }
+
+            else:
+                self.last_host_disk_io = dict()
+
+            self.last_host_disk_io[dev] = disk_io_counters[dev]
+
+            if disk_io.__len__() > 0:
+                data.append(disk_io)
+
+        if data.__len__() > 0:
+            host_collection_performance_emit.disk_io(data=data)
 

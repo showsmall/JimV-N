@@ -17,6 +17,7 @@ class EmitKind(IntEnum):
     host_event = 2
     response = 3
     collection_performance = 4
+    host_collection_performance = 5
 
 
 class GuestState(IntEnum):
@@ -62,4 +63,10 @@ class CollectionPerformanceDataKind(IntEnum):
     cpu_memory = 0
     traffic = 1
     disk_io = 2
+
+
+class HostCollectionPerformanceDataKind(IntEnum):
+    cpu_memory = 0
+    traffic = 1
+    disk_usage_io = 2
 

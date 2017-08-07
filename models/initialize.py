@@ -13,7 +13,8 @@ import redis
 import jimit as ji
 
 from jimvn_exception import PathNotExist
-from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit, CollectionPerformanceEmit
+from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit
+from utils import CollectionPerformanceEmit, HostCollectionPerformanceEmit
 
 
 __author__ = 'James Iter'
@@ -129,6 +130,10 @@ response_emit.r = r
 collection_performance_emit = CollectionPerformanceEmit()
 collection_performance_emit.upstream_queue = config['upstream_queue']
 collection_performance_emit.r = r
+
+host_collection_performance_emit = HostCollectionPerformanceEmit()
+host_collection_performance_emit.upstream_queue = config['upstream_queue']
+host_collection_performance_emit.r = r
 
 thread_status = dict()
 
