@@ -57,6 +57,14 @@ if __name__ == '__main__':
                 args=())
             threads.append(t_)
 
+            host_use_for_host_collection_performance_process_engine = Host()
+            host_use_for_host_collection_performance_process_engine.init_conn()
+            t_ = threading.Thread(
+                target=
+                host_use_for_host_collection_performance_process_engine.host_collection_performance_process_engine,
+                args=())
+            threads.append(t_)
+
             host_use_for_host_state_report_engine.refresh_guest_state()
 
             for t in threads:

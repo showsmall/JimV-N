@@ -44,10 +44,10 @@ class Host(object):
         self.disks = dict()
         self.guest_callbacks = list()
         self.interval = 60
-        self.last_host_cpu_time = dict()
+        # self.last_host_cpu_time = dict()
         self.last_host_traffic = dict()
         self.last_host_disk_io = dict()
-        # self.last_guest_cpu_time = dict()
+        self.last_guest_cpu_time = dict()
         self.last_guest_traffic = dict()
         self.last_guest_disk_io = dict()
         self.ts = ji.Common.ts()
@@ -522,8 +522,8 @@ class Host(object):
             cpu_memory = dict()
 
             if _uuid in self.last_guest_cpu_time:
-                cpu_load = (cpu_time2 - self.last_guest_cpu_time[_uuid]['cpu_time']) / self.interval / 1000 ** 3. * 100 / \
-                           cpu_count
+                cpu_load = (cpu_time2 - self.last_guest_cpu_time[_uuid]['cpu_time']) / self.interval / 1000 ** 3. \
+                           * 100 / cpu_count
                 # 计算 cpu_load 的公式：
                 # (cpu_time2 - cpu_time1) / interval_N / 1000**3.(nanoseconds to seconds) * 100(percent) /
                 # cpu_count
@@ -576,12 +576,14 @@ class Host(object):
                     traffic = {
                         'guest_uuid': _uuid,
                         'name': name,
-                        'rx_bytes': (interface_state[0] - self.last_guest_traffic[interface_id]['rx_bytes']) / self.interval,
+                        'rx_bytes':
+                            (interface_state[0] - self.last_guest_traffic[interface_id]['rx_bytes']) / self.interval,
                         'rx_packets':
                             (interface_state[1] - self.last_guest_traffic[interface_id]['rx_packets']) / self.interval,
                         'rx_errs': interface_state[2],
                         'rx_drop': interface_state[3],
-                        'tx_bytes': (interface_state[4] - self.last_guest_traffic[interface_id]['tx_bytes']) / self.interval,
+                        'tx_bytes':
+                            (interface_state[4] - self.last_guest_traffic[interface_id]['tx_bytes']) / self.interval,
                         'tx_packets':
                             (interface_state[5] - self.last_guest_traffic[interface_id]['tx_packets']) / self.interval,
                         'tx_errs': interface_state[6],
@@ -715,6 +717,8 @@ class Host(object):
             if nic is None:
                 continue
 
+            traffic = list()
+
             if nic_name in self.last_host_traffic:
                 traffic = {
                     'node_id': self.node_id,
@@ -730,7 +734,7 @@ class Host(object):
                     'tx_errs': (nic.errout - self.last_host_traffic[nic_name].errout),
                     'tx_drop': (nic.dropout - self.last_host_traffic[nic_name].dropout)
                 }
-            else:
+            elif not isinstance(self.last_host_disk_io, dict):
                 self.last_host_traffic = dict()
 
             self.last_host_traffic[nic_name] = nic
@@ -741,15 +745,16 @@ class Host(object):
         if data.__len__() > 0:
             host_collection_performance_emit.traffic(data=data)
 
-    def host_disk_io_performance_report(self):
+    def host_disk_usage_io_performance_report(self):
 
         data = list()
         disk_io_counters = psutil.disk_io_counters(perdisk=True)
 
         for mountpoint, disk in self.disks.items():
             dev = os.path.basename(disk['real_device'])
-            if dev in disk_io_counters:
-                disk_io = {
+            disk_usage_io = list()
+            if dev in self.last_host_disk_io:
+                disk_usage_io = {
                     'node_id': self.node_id,
                     'mountpoint': mountpoint,
                     'used': psutil.disk_usage(mountpoint).used,
@@ -763,14 +768,45 @@ class Host(object):
                         (disk_io_counters[dev].write_bytes - self.last_host_disk_io[dev].write_bytes) / self.interval
                 }
 
-            else:
+            elif not isinstance(self.last_host_disk_io, dict):
                 self.last_host_disk_io = dict()
 
             self.last_host_disk_io[dev] = disk_io_counters[dev]
 
-            if disk_io.__len__() > 0:
-                data.append(disk_io)
+            if disk_usage_io.__len__() > 0:
+                data.append(disk_usage_io)
 
         if data.__len__() > 0:
-            host_collection_performance_emit.disk_io(data=data)
+            host_collection_performance_emit.disk_usage_io(data=data)
+
+    def host_collection_performance_process_engine(self):
+
+        while True:
+            if Utils.exit_flag:
+                print 'Thread host_collection_performance_process_engine say bye-bye'
+                return
+
+            if config['debug']:
+                print 'host_collection_performance_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
+
+            thread_status['host_collection_performance_process_engine'] = ji.JITime.now_date_time()
+            time.sleep(1)
+            self.ts = ji.Common.ts()
+
+            # noinspection PyBroadException
+            try:
+
+                if self.ts % self.interval != 0:
+                    continue
+
+                self.update_interfaces()
+                self.update_disks()
+                self.host_cpu_memory_performance_report()
+                self.host_traffic_performance_report()
+                self.host_disk_usage_io_performance_report()
+
+            except:
+                print traceback.format_exc()
+                logger.error(traceback.format_exc())
+                log_emit.error(traceback.format_exc())
 
