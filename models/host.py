@@ -446,6 +446,7 @@ class Host(object):
         self.interfaces.clear()
         for nic_name, nic_s in psutil.net_if_addrs().items():
             for nic in nic_s:
+                # 参考链接：https://github.com/torvalds/linux/blob/5518b69b76680a4f2df96b1deca260059db0c2de/include/linux/socket.h
                 if nic.family == 2:
                     for _nic in nic_s:
                         if _nic.family == 2:
@@ -494,8 +495,10 @@ class Host(object):
                     self.update_interfaces()
                     self.update_disks()
 
-                host_event_emit.heartbeat(node_id=self.node_id, cpu=self.cpu, memory=self.memory,
-                                          interfaces=self.interfaces, disks=self.disks)
+                host_event_emit.heartbeat(message={'node_id': self.node_id, 'cpu': self.cpu, 'memory': self.memory,
+                                                   'interfaces': self.interfaces, 'disks': self.disks,
+                                                   'system_load': os.getloadavg(),
+                                                   'memory_available': psutil.virtual_memory().available})
 
             except:
                 logger.error(traceback.format_exc())
