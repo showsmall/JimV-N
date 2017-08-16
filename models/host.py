@@ -112,47 +112,47 @@ class Host(object):
                     log_emit.error(e.message)
                     continue
 
-                if msg['action'] == 'create_guest':
+                # if msg['action'] == 'create_guest':
+                #
+                #     self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
+                #                        template_path=msg['template_path'], disk=msg['disk'], xml=msg['xml'])
+                #     if Guest.gf is None:
+                #         Guest.glusterfs_volume = msg['glusterfs_volume']
+                #         Guest.init_gfapi()
+                #
+                #     self.guest.system_image_path = self.guest.disk['path']
+                #
+                #     # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
+                #     self.dirty_scene = True
+                #
+                #     if not self.guest.generate_system_image():
+                #         response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
+                #                               passback_parameters=msg.get('passback_parameters'))
+                #         continue
+                #
+                #     if not self.guest.define_by_xml(conn=self.conn):
+                #         response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
+                #                               passback_parameters=msg.get('passback_parameters'))
+                #         continue
+                #
+                #     # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
+                #     self.dirty_scene = False
+                #
+                #     disk_info = Disk.disk_info(glusterfs_volume=self.guest.glusterfs_volume,
+                #                                image_path=self.guest.system_image_path)
+                #
+                #     # 由该线程最顶层的异常捕获机制，处理其抛出的异常
+                #     self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
+                #                                  boot_jobs=msg['boot_jobs'])
+                #
+                #     response_emit.success(action=msg['action'], uuid=self.guest.uuid, data={'disk_info': disk_info},
+                #                           passback_parameters=msg.get('passback_parameters'))
+                #
+                #     if not self.guest.start_by_uuid(conn=self.conn):
+                #         # 不清理现场，如需清理，让用户手动通过面板删除
+                #         continue
 
-                    self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
-                                       template_path=msg['template_path'], disk=msg['disk'], xml=msg['xml'])
-                    if Guest.gf is None:
-                        Guest.glusterfs_volume = msg['glusterfs_volume']
-                        Guest.init_gfapi()
-
-                    self.guest.system_image_path = self.guest.disk['path']
-
-                    # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
-                    self.dirty_scene = True
-
-                    if not self.guest.generate_system_image():
-                        response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
-                                              passback_parameters=msg.get('passback_parameters'))
-                        continue
-
-                    if not self.guest.define_by_xml(conn=self.conn):
-                        response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
-                                              passback_parameters=msg.get('passback_parameters'))
-                        continue
-
-                    # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
-                    self.dirty_scene = False
-
-                    disk_info = Disk.disk_info(glusterfs_volume=self.guest.glusterfs_volume,
-                                               image_path=self.guest.system_image_path)
-
-                    # 由该线程最顶层的异常捕获机制，处理其抛出的异常
-                    self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
-                                                 boot_jobs=msg['boot_jobs'])
-
-                    response_emit.success(action=msg['action'], uuid=self.guest.uuid, data={'disk_info': disk_info},
-                                          passback_parameters=msg.get('passback_parameters'))
-
-                    if not self.guest.start_by_uuid(conn=self.conn):
-                        # 不清理现场，如需清理，让用户手动通过面板删除
-                        continue
-
-                elif msg['action'] == 'create_disk':
+                if msg['action'] == 'create_disk':
                     if Guest.gf is None:
                         Guest.glusterfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
@@ -248,23 +248,67 @@ class Host(object):
 
                 self.refresh_guest_mapping()
 
-                if msg['uuid'] not in self.guest_mapping_by_uuid:
+                if msg['action'] not in ['create']:
 
-                    if config['debug']:
-                        log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
-                        logger.debug(log)
-                        log_emit.debug(log)
+                    if msg['uuid'] not in self.guest_mapping_by_uuid:
 
-                    continue
+                        if config['debug']:
+                            log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
+                            logger.debug(log)
+                            log_emit.debug(log)
 
-                self.guest = self.guest_mapping_by_uuid[msg['uuid']]
-                if not isinstance(self.guest, libvirt.virDomain):
-                    log = u' '.join([u'uuid', msg['uuid'], u'已不存在于', self.hostname, u'在宿主机中。'])
-                    logger.warning(log)
-                    log_emit.warn(log)
-                    continue
+                        continue
 
-                if msg['action'] == 'reboot':
+                    self.guest = self.guest_mapping_by_uuid[msg['uuid']]
+                    if not isinstance(self.guest, libvirt.virDomain):
+                        log = u' '.join([u'uuid', msg['uuid'], u'已不存在于', self.hostname, u'在宿主机中。'])
+                        logger.warning(log)
+                        log_emit.warn(log)
+                        continue
+
+                if msg['action'] == 'create':
+                    if msg['hostname'] != self.hostname:
+                        continue
+
+                    self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
+                                       template_path=msg['template_path'], disk=msg['disk'], xml=msg['xml'])
+                    if Guest.gf is None:
+                        Guest.glusterfs_volume = msg['glusterfs_volume']
+                        Guest.init_gfapi()
+
+                    self.guest.system_image_path = self.guest.disk['path']
+
+                    # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
+                    self.dirty_scene = True
+
+                    if not self.guest.generate_system_image():
+                        response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
+                                              passback_parameters=msg.get('passback_parameters'))
+                        continue
+
+                    if not self.guest.define_by_xml(conn=self.conn):
+                        response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
+                                              passback_parameters=msg.get('passback_parameters'))
+                        continue
+
+                    # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
+                    self.dirty_scene = False
+
+                    disk_info = Disk.disk_info(glusterfs_volume=self.guest.glusterfs_volume,
+                                               image_path=self.guest.system_image_path)
+
+                    # 由该线程最顶层的异常捕获机制，处理其抛出的异常
+                    self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
+                                                 boot_jobs=msg['boot_jobs'])
+
+                    response_emit.success(action=msg['action'], uuid=self.guest.uuid, data={'disk_info': disk_info},
+                                          passback_parameters=msg.get('passback_parameters'))
+
+                    if not self.guest.start_by_uuid(conn=self.conn):
+                        # 不清理现场，如需清理，让用户手动通过面板删除
+                        continue
+
+                elif msg['action'] == 'reboot':
                     if self.guest.reboot() == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
