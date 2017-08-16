@@ -18,7 +18,7 @@ import psutil
 from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, log_emit, response_emit, host_event_emit, collection_performance_emit, \
-    host_cpu_count, thread_status, host_collection_performance_emit
+    thread_status, host_collection_performance_emit
 from guest import Guest
 from disk import Disk
 from utils import Utils
@@ -97,10 +97,6 @@ class Host(object):
                 if config['debug']:
                     print 'downstream_queue_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
-                # 大于 0.6 的系统将不再被分配创建虚拟机
-                if load_avg > host_cpu_count * 0.6:
-                    continue
-
                 msg = r.lpop(config['downstream_queue'])
                 if msg is None:
                     continue
@@ -111,46 +107,6 @@ class Host(object):
                     logger.error(e.message)
                     log_emit.error(e.message)
                     continue
-
-                # if msg['action'] == 'create_guest':
-                #
-                #     self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
-                #                        template_path=msg['template_path'], disk=msg['disk'], xml=msg['xml'])
-                #     if Guest.gf is None:
-                #         Guest.glusterfs_volume = msg['glusterfs_volume']
-                #         Guest.init_gfapi()
-                #
-                #     self.guest.system_image_path = self.guest.disk['path']
-                #
-                #     # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
-                #     self.dirty_scene = True
-                #
-                #     if not self.guest.generate_system_image():
-                #         response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
-                #                               passback_parameters=msg.get('passback_parameters'))
-                #         continue
-                #
-                #     if not self.guest.define_by_xml(conn=self.conn):
-                #         response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
-                #                               passback_parameters=msg.get('passback_parameters'))
-                #         continue
-                #
-                #     # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
-                #     self.dirty_scene = False
-                #
-                #     disk_info = Disk.disk_info(glusterfs_volume=self.guest.glusterfs_volume,
-                #                                image_path=self.guest.system_image_path)
-                #
-                #     # 由该线程最顶层的异常捕获机制，处理其抛出的异常
-                #     self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
-                #                                  boot_jobs=msg['boot_jobs'])
-                #
-                #     response_emit.success(action=msg['action'], uuid=self.guest.uuid, data={'disk_info': disk_info},
-                #                           passback_parameters=msg.get('passback_parameters'))
-                #
-                #     if not self.guest.start_by_uuid(conn=self.conn):
-                #         # 不清理现场，如需清理，让用户手动通过面板删除
-                #         continue
 
                 if msg['action'] == 'create_disk':
                     if Guest.gf is None:
