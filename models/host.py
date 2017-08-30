@@ -22,6 +22,7 @@ from initialize import config, logger, r, log_emit, response_emit, host_event_em
 from guest import Guest
 from disk import Disk
 from utils import Utils
+from status import JimVEdition, DFS
 
 
 __author__ = 'James Iter'
@@ -110,7 +111,7 @@ class Host(object):
 
                 if msg['action'] == 'create_disk':
                     if Guest.gf is None:
-                        Guest.glusterfs_volume = msg['glusterfs_volume']
+                        Guest.dfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
 
                     if Disk.make_qemu_image_by_glusterfs(gf=Guest.gf, glusterfs_volume=msg['glusterfs_volume'],
@@ -135,7 +136,7 @@ class Host(object):
 
                 elif msg['action'] == 'delete_disk':
                     if Guest.gf is None:
-                        Guest.glusterfs_volume = msg['glusterfs_volume']
+                        Guest.dfs_volume = msg['glusterfs_volume']
                         Guest.init_gfapi()
 
                     if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']):
@@ -226,11 +227,17 @@ class Host(object):
                     if msg['hostname'] != self.hostname:
                         continue
 
-                    self.guest = Guest(uuid=msg['uuid'], name=msg['name'], glusterfs_volume=msg['glusterfs_volume'],
-                                       template_path=msg['template_path'], disk=msg['disk'], xml=msg['xml'])
-                    if Guest.gf is None:
-                        Guest.glusterfs_volume = msg['glusterfs_volume']
-                        Guest.init_gfapi()
+                    Guest.jimv_edition = msg['jimv_edition']
+
+                    self.guest = Guest(uuid=msg['uuid'], name=msg['name'], template_path=msg['template_path'],
+                                       disk=msg['disk'], xml=msg['xml'])
+
+                    if Guest.jimv_edition == JimVEdition.hyper_convergence.value:
+                        Guest.dfs = msg['dfs']
+                        if Guest.dfs == DFS.glusterfs.value:
+                            if Guest.gf is None:
+                                Guest.dfs_volume = msg['glusterfs_volume']
+                                Guest.init_gfapi()
 
                     self.guest.system_image_path = self.guest.disk['path']
 
@@ -250,8 +257,15 @@ class Host(object):
                     # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
                     self.dirty_scene = False
 
-                    disk_info = Disk.disk_info(glusterfs_volume=self.guest.glusterfs_volume,
-                                               image_path=self.guest.system_image_path)
+                    disk_info = dict()
+
+                    if Guest.jimv_edition == JimVEdition.hyper_convergence.value:
+                        if Guest.dfs == DFS.glusterfs.value:
+                            disk_info = Disk.disk_info_by_glusterfs(glusterfs_volume=self.guest.glusterfs_volume,
+                                                                    image_path=self.guest.system_image_path)
+
+                    else:
+                        disk_info = Disk.disk_info(image_path=self.guest.system_image_path)
 
                     # 由该线程最顶层的异常捕获机制，处理其抛出的异常
                     self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
@@ -338,7 +352,7 @@ class Host(object):
                     path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
 
                     if Guest.gf is None:
-                        Guest.glusterfs_volume = path_list[0]
+                        Guest.dfs_volume = path_list[0]
                         Guest.init_gfapi()
 
                     if self.guest.isActive():

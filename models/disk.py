@@ -55,8 +55,21 @@ class Disk(object):
         gf.remove(image_path)
 
     @staticmethod
-    def disk_info(glusterfs_volume, image_path):
+    def disk_info_by_glusterfs(glusterfs_volume, image_path):
         image_path = '/'.join(['gluster://127.0.0.1', glusterfs_volume, image_path])
+        cmd = ' '.join(['/usr/bin/qemu-img', 'info', '--output=json', '-f', 'qcow2', image_path, '2>/dev/null'])
+        exit_status, output = Utils.shell_cmd(cmd)
+
+        if exit_status != 0:
+            log = u' '.join([u'路径', image_path, u'磁盘扩容时，命令执行退出异常：', str(output)])
+            logger.error(msg=log)
+            log_emit.error(msg=log)
+            raise CommandExecFailed(log)
+
+        return json.loads(output)
+
+    @staticmethod
+    def disk_info(image_path):
         cmd = ' '.join(['/usr/bin/qemu-img', 'info', '--output=json', '-f', 'qcow2', image_path, '2>/dev/null'])
         exit_status, output = Utils.shell_cmd(cmd)
 

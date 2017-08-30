@@ -11,6 +11,16 @@ __contact__ = 'james.iter.cn@gmail.com'
 __copyright__ = '(c) 2017 by James Iter.'
 
 
+class JimVEdition(IntEnum):
+    standalone = 0
+    hyper_convergence = 1
+
+
+class DFS(IntEnum):
+    ceph = 0
+    glusterfs = 1
+
+
 class EmitKind(IntEnum):
     log = 0
     guest_event = 1

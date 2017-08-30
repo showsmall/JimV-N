@@ -3,6 +3,7 @@
 
 
 import os
+import shutil
 
 import guestfs
 import libvirt
@@ -10,7 +11,8 @@ from gluster import gfapi
 import xml.etree.ElementTree as ET
 
 from initialize import logger, log_emit, guest_event_emit
-from models.status import OperateRuleKind
+from models.status import OperateRuleKind, JimVEdition, DFS
+
 
 __author__ = 'James Iter'
 __date__ = '2017/3/1'
@@ -19,8 +21,10 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 class Guest(object):
+    jimv_edition = None
+    dfs = None
     gf = None
-    glusterfs_volume = 'gv0'
+    dfs_volume = None
 
     def __init__(self, **kwargs):
         self.uuid = kwargs.get('uuid', None)
@@ -32,28 +36,53 @@ class Guest(object):
         # self.clone = True
         # Guest 系统盘及数据磁盘
         self.disk = kwargs.get('disk', None)
-        self.writes = kwargs.get('writes', None)
         self.xml = kwargs.get('xml', None)
-        # Guest 系统镜像路径，不包含 glusterfs 卷标
+        # Guest 系统镜像路径，不包含 dfs 卷标
         self.system_image_path = None
         self.g = guestfs.GuestFS(python_return_dict=True)
 
     @classmethod
     def init_gfapi(cls):
-        cls.gf = gfapi.Volume('127.0.0.1', cls.glusterfs_volume)
+        cls.gf = gfapi.Volume('127.0.0.1', cls.dfs_volume)
         cls.gf.mount()
 
     def generate_system_image(self):
-        if not self.gf.isfile(self.template_path):
-            log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'所依赖的模板', self.template_path, u'不存在.'])
-            logger.error(msg=log)
-            log_emit.error(msg=log)
-            return False
+        if self.jimv_edition == JimVEdition.hyper_convergence.value:
+            if self.dfs == DFS.glusterfs.value:
+                if not self.gf.isfile(self.template_path):
+                    log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'所依赖的模板', self.template_path, u'不存在.'])
+                    logger.error(msg=log)
+                    log_emit.error(msg=log)
+                    return False
 
-        if not self.gf.isdir(os.path.dirname(self.system_image_path)):
-            self.gf.makedirs(os.path.dirname(self.system_image_path), 0755)
+                if not self.gf.isdir(os.path.dirname(self.system_image_path)):
+                    self.gf.makedirs(os.path.dirname(self.system_image_path), 0755)
 
-        self.gf.copy(self.template_path, self.system_image_path)
+                self.gf.copyfile(self.template_path, self.system_image_path)
+
+        else:
+            if not os.path.exists(self.template_path) or not os.path.isfile(self.template_path):
+                log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'所依赖的模板', self.template_path, u'不存在.'])
+                logger.error(msg=log)
+                log_emit.error(msg=log)
+                return False
+
+            if not os.access(self.template_path, os.R_OK):
+                log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'所依赖的模板', self.template_path, u'无权访问.'])
+                logger.error(msg=log)
+                log_emit.error(msg=log)
+                return False
+
+            system_image_path_dir = os.path.dirname(self.system_image_path)
+
+            if not os.path.exists(system_image_path_dir):
+                os.makedirs(system_image_path_dir, 0755)
+
+            elif not os.path.isdir(system_image_path_dir):
+                os.rename(system_image_path_dir, system_image_path_dir + '.bak')
+                os.makedirs(system_image_path_dir, 0755)
+
+            shutil.copyfile(self.template_path, self.system_image_path)
 
         return True
 
@@ -67,12 +96,19 @@ class Guest(object):
         self.xml = guest.XMLDesc()
         root = ET.fromstring(self.xml)
 
-        for dev in root.findall('devices/disk'):
-            filename = dev.find('source').get('name')
-            _format = dev.find('driver').attrib['type']
-            protocol = dev.find('source').get('protocol')
-            server = dev.find('source/host').get('name')
-            self.g.add_drive(filename=filename, format=_format, protocol=protocol, server=[server])
+        if self.jimv_edition == JimVEdition.hyper_convergence.value:
+            for dev in root.findall('devices/disk'):
+                filename = dev.find('source').get('name')
+                _format = dev.find('driver').attrib['type']
+                protocol = dev.find('source').get('protocol')
+                server = dev.find('source/host').get('name')
+                self.g.add_drive(filename=filename, format=_format, protocol=protocol, server=[server])
+
+        else:
+            for dev in root.findall('devices/disk'):
+                filename = dev.find('source').get('file')
+                _format = dev.find('driver').attrib['type']
+                self.g.add_drive(filename=filename, format=_format, protocol='file')
 
         self.g.launch()
         self.g.mount(self.g.inspect_os()[0], '/')
