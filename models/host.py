@@ -635,7 +635,16 @@ class Host(object):
 
             for disk in root.findall('devices/disk'):
                 dev = disk.find('target').get('dev')
-                dev_path = disk.find('source').get('name')
+                protocol = disk.find('source').get('protocol')
+
+                dev_path = None
+
+                if protocol in [None, 'file']:
+                    dev_path = disk.find('source').get('file')
+
+                elif protocol == 'gluster':
+                    dev_path = disk.find('source').get('name')
+
                 if dev_path is None:
                     continue
 
