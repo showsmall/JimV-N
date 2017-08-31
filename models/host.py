@@ -435,10 +435,12 @@ class Host(object):
                         log = u'迁移操作缺少 duri 参数'
                         raise KeyError(log)
 
+                    # https://rk4n.github.io/2016/08/10/qemu-post-copy-and-auto-converge-features/
                     flags = libvirt.VIR_MIGRATE_PERSIST_DEST | \
                         libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | \
                         libvirt.VIR_MIGRATE_COMPRESSED | \
-                        libvirt.VIR_MIGRATE_PEER2PEER
+                        libvirt.VIR_MIGRATE_PEER2PEER | \
+                        libvirt.VIR_MIGRATE_AUTO_CONVERGE
 
                     root = ET.fromstring(self.guest.XMLDesc())
 
