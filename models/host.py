@@ -435,21 +435,30 @@ class Host(object):
                         log = u'迁移操作缺少 duri 参数'
                         raise KeyError(log)
 
-                    flags = libvirt.VIR_MIGRATE_PEER2PEER | \
-                        libvirt.VIR_MIGRATE_PERSIST_DEST | \
+                    flags = libvirt.VIR_MIGRATE_PERSIST_DEST | \
                         libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | \
-                        libvirt.VIR_MIGRATE_COMPRESSED
+                        libvirt.VIR_MIGRATE_COMPRESSED | \
+                        libvirt.VIR_MIGRATE_PEER2PEER
 
                     if msg['jimv_edition'] == JimVEdition.standalone.value:
                         # 需要把磁盘存放路径加入到两边宿主机的存储池中
                         # 不然将会报 no storage pool with matching target path '/opt/Images' 错误
                         flags |= libvirt.VIR_MIGRATE_NON_SHARED_DISK
-
-                    if self.guest.isActive():
                         flags |= libvirt.VIR_MIGRATE_LIVE
-                        flags |= libvirt.VIR_MIGRATE_TUNNELLED
-                    else:
-                        flags |= libvirt.VIR_MIGRATE_OFFLINE
+
+                        if not self.guest.isActive():
+                            log = u'非共享存储不支持离线迁移。'
+                            logger.error(log)
+                            log_emit.error(log)
+                            continue
+
+                    elif msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                        if self.guest.isActive():
+                            flags |= libvirt.VIR_MIGRATE_LIVE
+                            flags |= libvirt.VIR_MIGRATE_TUNNELLED
+
+                        else:
+                            flags |= libvirt.VIR_MIGRATE_OFFLINE
 
                     if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
