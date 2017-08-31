@@ -440,6 +440,8 @@ class Host(object):
                         libvirt.VIR_MIGRATE_COMPRESSED | \
                         libvirt.VIR_MIGRATE_PEER2PEER
 
+                    root = ET.fromstring(self.guest.XMLDesc())
+
                     if msg['jimv_edition'] == JimVEdition.standalone.value:
                         # 需要把磁盘存放路径加入到两边宿主机的存储池中
                         # 不然将会报 no storage pool with matching target path '/opt/Images' 错误
@@ -461,6 +463,11 @@ class Host(object):
                             flags |= libvirt.VIR_MIGRATE_OFFLINE
 
                     if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
+                        if msg['jimv_edition'] == JimVEdition.standalone.value:
+                            # TODO: 把迁移过去该 Guest 的所有磁盘都删除
+                            file_path = root.find('devices/disk[0]/source').attrib['file']
+                            os.remove(file_path)
+
                         response_emit.success(action=msg['action'], uuid=msg['uuid'],
                                               passback_parameters=msg.get('passback_parameters'))
                     else:
