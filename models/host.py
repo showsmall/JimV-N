@@ -348,21 +348,29 @@ class Host(object):
 
                 elif msg['action'] == 'delete_guest':
                     root = ET.fromstring(self.guest.XMLDesc())
-                    # 签出系统镜像路径
-                    path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
-
-                    if Guest.gf is None:
-                        Guest.dfs_volume = path_list[0]
-                        Guest.init_gfapi()
 
                     if self.guest.isActive():
                         self.guest.destroy()
+                        self.guest.undefine()
 
-                    if self.guest.undefine() == 0 and \
-                            Guest.gf.exists('/'.join(path_list[1:])) and \
-                            Guest.gf.remove('/'.join(path_list[1:])) is None:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                    if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                        # 签出系统镜像路径
+                        path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
+
+                        if msg['dfs'] == DFS.glusterfs.value:
+                            if Guest.gf is None:
+                                Guest.dfs_volume = path_list[0]
+                                Guest.init_gfapi()
+                                if Guest.gf.exists('/'.join(path_list[1:])) and \
+                                        Guest.gf.remove('/'.join(path_list[1:])) is None:
+                                    response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                                          passback_parameters=msg.get('passback_parameters'))
+
+                    elif msg['jimv_edition'] == JimVEdition.standalone.value:
+                        file_path = root.find('devices/disk[0]/source').attrib['file']
+                        if os.path.isfile(file_path) and os.remove(file_path) is None:
+                            response_emit.success(action=msg['action'], uuid=msg['uuid'],
+                                                  passback_parameters=msg.get('passback_parameters'))
 
                     else:
                         response_emit.failure(action=msg['action'], uuid=msg['uuid'],
@@ -431,6 +439,11 @@ class Host(object):
                         libvirt.VIR_MIGRATE_PERSIST_DEST | \
                         libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | \
                         libvirt.VIR_MIGRATE_COMPRESSED
+
+                    if msg['jimv_edition'] == JimVEdition.standalone.value:
+                        # 需要把磁盘存放路径加入到两边宿主机的存储池中
+                        # 不然将会报 no storage pool with matching target path '/opt/Images' 错误
+                        flags |= libvirt.VIR_MIGRATE_NON_SHARED_DISK
 
                     if self.guest.isActive():
                         flags |= libvirt.VIR_MIGRATE_LIVE
