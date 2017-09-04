@@ -134,17 +134,17 @@ class ResponseEmit(Emit):
     def __init__(self):
         super(ResponseEmit, self).__init__()
 
-    def emit2(self, _type=None, action=None, uuid=None, data=None, passback_parameters=None):
+    def emit2(self, _type=None, _object=None, action=None, uuid=None, data=None, passback_parameters=None):
         return self.emit(_kind=EmitKind.response.value, _type=_type,
-                         message={'action': action, 'uuid': uuid, 'data': data,
+                         message={'_object': _object, 'action': action, 'uuid': uuid, 'data': data,
                                   'passback_parameters': passback_parameters})
 
-    def success(self, action, uuid, passback_parameters, data=None):
-        return self.emit2(_type=ResponseState.success.value, action=action, uuid=uuid, data=data,
+    def success(self, _object, action, uuid, passback_parameters, data=None):
+        return self.emit2(_type=ResponseState.success.value, _object=_object, action=action, uuid=uuid, data=data,
                           passback_parameters=passback_parameters)
 
-    def failure(self, action, uuid, passback_parameters, data=None):
-        return self.emit2(_type=ResponseState.failure.value, action=action, uuid=uuid, data=data,
+    def failure(self, _object, action, uuid, passback_parameters, data=None):
+        return self.emit2(_type=ResponseState.failure.value, _object=_object, action=action, uuid=uuid, data=data,
                           passback_parameters=passback_parameters)
 
 

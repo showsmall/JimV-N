@@ -90,7 +90,7 @@ class Host(object):
             # noinspection PyBroadException
             try:
                 # 清理上个周期弄脏的现场
-                self.clear_scene()
+                # self.clear_scene()
                 # 取系统最近 5 分钟的平均负载值
                 load_avg = os.getloadavg()[1]
                 # sleep 加 1，避免 load_avg 为 0 时，循环过度
@@ -108,44 +108,6 @@ class Host(object):
                     logger.error(e.message)
                     log_emit.error(e.message)
                     continue
-
-                if msg['action'] == 'create_disk':
-                    if Guest.gf is None:
-                        Guest.dfs_volume = msg['glusterfs_volume']
-                        Guest.init_gfapi()
-
-                    if Disk.make_qemu_image_by_glusterfs(gf=Guest.gf, glusterfs_volume=msg['glusterfs_volume'],
-                                                         image_path=msg['image_path'], size=msg['size']):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                # 离线磁盘扩容
-                elif msg['action'] == 'resize_disk':
-                    if Disk.resize_qemu_image_by_glusterfs(glusterfs_volume=msg['glusterfs_volume'],
-                                                           image_path=msg['image_path'], size=msg['size']):
-                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['disk_uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                elif msg['action'] == 'delete_disk':
-                    if Guest.gf is None:
-                        Guest.dfs_volume = msg['glusterfs_volume']
-                        Guest.init_gfapi()
-
-                    if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']):
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
 
                 else:
                     pass
@@ -195,296 +157,314 @@ class Host(object):
                     log_emit.error(e.message)
                     continue
 
-                # guest_uuid 与 uuid 一个意思
-                if 'guest_uuid' in msg:
-                    msg['uuid'] = msg['guest_uuid']
-
-                # 下列语句繁琐写法如 <code>if 'action' not in msg or 'uuid' not in msg:</code>
-                if not all([key in msg for key in ['action', 'uuid']]):
+                if 'hostname' in msg and msg['hostname'] != self.hostname:
                     continue
 
-                self.refresh_guest_mapping()
+                # 下列语句繁琐写法如 <code>if 'action' not in msg or 'uuid' not in msg:</code>
+                if not all([key in msg for key in ['_object', 'action', 'uuid']]):
+                    continue
 
-                if msg['action'] not in ['create']:
+                extend_data = dict()
 
-                    if msg['uuid'] not in self.guest_mapping_by_uuid:
+                if msg['_object'] == 'guest':
 
-                        if config['debug']:
-                            log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
-                            logger.debug(log)
-                            log_emit.debug(log)
+                    self.refresh_guest_mapping()
+                    if msg['action'] not in ['create']:
 
-                        continue
+                        if msg['uuid'] not in self.guest_mapping_by_uuid:
 
-                    self.guest = self.guest_mapping_by_uuid[msg['uuid']]
-                    if not isinstance(self.guest, libvirt.virDomain):
-                        log = u' '.join([u'uuid', msg['uuid'], u'已不存在于', self.hostname, u'在宿主机中。'])
-                        logger.warning(log)
-                        log_emit.warn(log)
-                        continue
+                            if config['debug']:
+                                log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
+                                logger.debug(log)
+                                log_emit.debug(log)
 
-                if msg['action'] == 'create':
-                    if msg['hostname'] != self.hostname:
-                        continue
+                            raise
 
-                    Guest.jimv_edition = msg['jimv_edition']
+                        self.guest = self.guest_mapping_by_uuid[msg['uuid']]
+                        if not isinstance(self.guest, libvirt.virDomain):
+                            raise
 
-                    self.guest = Guest(uuid=msg['uuid'], name=msg['name'], template_path=msg['template_path'],
-                                       disk=msg['disk'], xml=msg['xml'])
+                    if msg['action'] == 'create':
 
-                    if Guest.jimv_edition == JimVEdition.hyper_convergence.value:
-                        Guest.dfs = msg['dfs']
-                        if Guest.dfs == DFS.glusterfs.value:
-                            if Guest.gf is None:
-                                Guest.dfs_volume = msg['glusterfs_volume']
-                                Guest.init_gfapi()
+                        Guest.jimv_edition = msg['jimv_edition']
 
-                    self.guest.system_image_path = self.guest.disk['path']
+                        self.guest = Guest(uuid=msg['uuid'], name=msg['name'], template_path=msg['template_path'],
+                                           disk=msg['disk'], xml=msg['xml'])
 
-                    # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
-                    self.dirty_scene = True
+                        if Guest.jimv_edition == JimVEdition.hyper_convergence.value:
+                            Guest.dfs = msg['dfs']
+                            if Guest.dfs == DFS.glusterfs.value:
+                                if Guest.gf is None:
+                                    Guest.dfs_volume = msg['dfs_volume']
+                                    Guest.init_gfapi()
 
-                    if not self.guest.generate_system_image():
-                        response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
-                                              passback_parameters=msg.get('passback_parameters'))
-                        continue
+                        self.guest.system_image_path = self.guest.disk['path']
 
-                    if not self.guest.define_by_xml(conn=self.conn):
-                        response_emit.failure(action=msg['action'], uuid=self.guest.uuid,
-                                              passback_parameters=msg.get('passback_parameters'))
-                        continue
+                        # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
+                        self.dirty_scene = True
 
-                    # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
-                    self.dirty_scene = False
+                        if not self.guest.generate_system_image():
+                            raise
 
-                    disk_info = dict()
+                        if not self.guest.define_by_xml(conn=self.conn):
+                            raise
 
-                    if Guest.jimv_edition == JimVEdition.hyper_convergence.value:
-                        if Guest.dfs == DFS.glusterfs.value:
-                            disk_info = Disk.disk_info_by_glusterfs(glusterfs_volume=self.guest.glusterfs_volume,
-                                                                    image_path=self.guest.system_image_path)
+                        # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
+                        self.dirty_scene = False
 
-                    else:
-                        disk_info = Disk.disk_info(image_path=self.guest.system_image_path)
+                        disk_info = dict()
 
-                    # 由该线程最顶层的异常捕获机制，处理其抛出的异常
-                    self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
-                                                 boot_jobs=msg['boot_jobs'])
-
-                    response_emit.success(action=msg['action'], uuid=self.guest.uuid, data={'disk_info': disk_info},
-                                          passback_parameters=msg.get('passback_parameters'))
-
-                    if not self.guest.start_by_uuid(conn=self.conn):
-                        # 不清理现场，如需清理，让用户手动通过面板删除
-                        continue
-
-                elif msg['action'] == 'reboot':
-                    if self.guest.reboot() == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                elif msg['action'] == 'force_reboot':
-                    if self.guest.destroy() == 0 and self.guest.create() == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                elif msg['action'] == 'shutdown':
-                    if self.guest.shutdown() == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                elif msg['action'] == 'force_shutdown':
-                    if self.guest.destroy() == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                elif msg['action'] == 'boot':
-                    if not self.guest.isActive():
-
-                        guest = Guest()
-                        guest.execute_boot_jobs(guest=self.guest, boot_jobs=msg['boot_jobs'])
-
-                        if self.guest.create() == 0:
-                            response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                                  passback_parameters=msg.get('passback_parameters'))
+                        if Guest.jimv_edition == JimVEdition.hyper_convergence.value:
+                            if Guest.dfs == DFS.glusterfs.value:
+                                disk_info = Disk.disk_info_by_glusterfs(dfs_volume=self.guest.dfs_volume,
+                                                                        image_path=self.guest.system_image_path)
 
                         else:
-                            response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                                  passback_parameters=msg.get('passback_parameters'))
+                            disk_info = Disk.disk_info_by_local(image_path=self.guest.system_image_path)
 
-                elif msg['action'] == 'suspend':
-                    if self.guest.suspend() == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                        # 由该线程最顶层的异常捕获机制，处理其抛出的异常
+                        self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
+                                                     boot_jobs=msg['boot_jobs'])
 
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                        extend_data.update({'disk_info': disk_info})
 
-                elif msg['action'] == 'resume':
-                    if self.guest.resume() == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                        if not self.guest.start_by_uuid(conn=self.conn):
+                            # 不清理现场，如需清理，让用户手动通过面板删除
+                            continue
 
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                    elif msg['action'] == 'reboot':
+                        if self.guest.reboot() != 0:
+                            raise
 
-                elif msg['action'] == 'delete_guest':
-                    root = ET.fromstring(self.guest.XMLDesc())
-
-                    if self.guest.isActive():
+                    elif msg['action'] == 'force_reboot':
                         self.guest.destroy()
+                        self.guest.create()
+
+                    elif msg['action'] == 'shutdown':
+                        if self.guest.shutdown() != 0:
+                            raise
+
+                    elif msg['action'] == 'force_shutdown':
+                        if self.guest.destroy() != 0:
+                            raise
+
+                    elif msg['action'] == 'boot':
+                        if not self.guest.isActive():
+
+                            guest = Guest()
+                            guest.execute_boot_jobs(guest=self.guest, boot_jobs=msg['boot_jobs'])
+
+                            if self.guest.create() != 0:
+                                raise
+
+                    elif msg['action'] == 'suspend':
+                        if self.guest.suspend() != 0:
+                            raise
+
+                    elif msg['action'] == 'resume':
+                        if self.guest.resume() != 0:
+                            raise
+
+                    elif msg['action'] == 'delete':
+                        root = ET.fromstring(self.guest.XMLDesc())
+
+                        if self.guest.isActive():
+                            self.guest.destroy()
+
                         self.guest.undefine()
 
-                    if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
-                        # 签出系统镜像路径
-                        path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
+                        if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                            # 签出系统镜像路径
+                            path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
 
                         if msg['dfs'] == DFS.glusterfs.value:
                             if Guest.gf is None:
                                 Guest.dfs_volume = path_list[0]
                                 Guest.init_gfapi()
-                                if Guest.gf.exists('/'.join(path_list[1:])) and \
-                                        Guest.gf.remove('/'.join(path_list[1:])) is None:
-                                    response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                                          passback_parameters=msg.get('passback_parameters'))
+                                if not Guest.gf.exists('/'.join(path_list[1:])) or \
+                                        Guest.gf.remove('/'.join(path_list[1:])) is not None:
+                                    raise
 
-                    elif msg['jimv_edition'] == JimVEdition.standalone.value:
-                        file_path = root.find('devices/disk[0]/source').attrib['file']
-                        if os.path.isfile(file_path) and os.remove(file_path) is None:
-                            response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                                  passback_parameters=msg.get('passback_parameters'))
-
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                # 在线磁盘扩容
-                elif msg['action'] == 'resize_disk':
-
-                    if not all([key in msg for key in ['device_node', 'size']]):
-                        log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
-                        raise KeyError(log)
-
-                    # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
-                    msg['size'] = int(msg['size']) * 1024 * 1024
-
-                    if self.guest.blockResize(disk=msg['device_node'], size=msg['size']) == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['disk_uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                elif msg['action'] == 'attach_disk':
-
-                    if 'xml' not in msg:
-                        log = u'添加磁盘缺少 xml 参数'
-                        raise KeyError(log)
-
-                    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
-                    if self.guest.isActive():
-                        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
-
-                    # 添加磁盘成功返回时，ret值为0。可参考 Linux 命令返回值规范？
-                    if self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags) == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                elif msg['action'] == 'detach_disk':
-
-                    if 'xml' not in msg:
-                        log = u'分离磁盘缺少 xml 参数'
-                        raise KeyError(log)
-
-                    flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
-                    if self.guest.isActive():
-                        flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
-
-                    if self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags) == 0:
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-
-                elif msg['action'] == 'migrate':
-
-                    # duri like qemu+ssh://destination_host/system
-                    if 'duri' not in msg:
-                        log = u'迁移操作缺少 duri 参数'
-                        raise KeyError(log)
-
-                    # https://rk4n.github.io/2016/08/10/qemu-post-copy-and-auto-converge-features/
-                    flags = libvirt.VIR_MIGRATE_PERSIST_DEST | \
-                        libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | \
-                        libvirt.VIR_MIGRATE_COMPRESSED | \
-                        libvirt.VIR_MIGRATE_PEER2PEER | \
-                        libvirt.VIR_MIGRATE_AUTO_CONVERGE
-
-                    root = ET.fromstring(self.guest.XMLDesc())
-
-                    if msg['jimv_edition'] == JimVEdition.standalone.value:
-                        # 需要把磁盘存放路径加入到两边宿主机的存储池中
-                        # 不然将会报 no storage pool with matching target path '/opt/Images' 错误
-                        flags |= libvirt.VIR_MIGRATE_NON_SHARED_DISK
-                        flags |= libvirt.VIR_MIGRATE_LIVE
-
-                        if not self.guest.isActive():
-                            log = u'非共享存储不支持离线迁移。'
-                            logger.error(log)
-                            log_emit.error(log)
-                            continue
-
-                    elif msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
-                        if self.guest.isActive():
-                            flags |= libvirt.VIR_MIGRATE_LIVE
-                            flags |= libvirt.VIR_MIGRATE_TUNNELLED
-
-                        else:
-                            flags |= libvirt.VIR_MIGRATE_OFFLINE
-
-                    if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
-                        if msg['jimv_edition'] == JimVEdition.standalone.value:
-                            # TODO: 把迁移过去该 Guest 的所有磁盘都删除
+                        elif msg['jimv_edition'] == JimVEdition.standalone.value:
                             file_path = root.find('devices/disk[0]/source').attrib['file']
-                            os.remove(file_path)
+                            if not os.path.isfile(file_path) or os.remove(file_path) is not None:
+                                raise
 
-                        response_emit.success(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
-                    else:
-                        response_emit.failure(action=msg['action'], uuid=msg['uuid'],
-                                              passback_parameters=msg.get('passback_parameters'))
+                    elif msg['action'] == 'attach_disk':
+
+                        if 'xml' not in msg:
+                            log = u'添加磁盘缺少 xml 参数'
+                            raise KeyError(log)
+
+                        flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+                        if self.guest.isActive():
+                            flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+
+                        # 添加磁盘成功返回时，ret值为0。可参考 Linux 命令返回值规范？
+                        if self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags) != 0:
+                            raise
+
+                    elif msg['action'] == 'detach_disk':
+
+                        if 'xml' not in msg:
+                            log = u'分离磁盘缺少 xml 参数'
+                            raise KeyError(log)
+
+                        flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
+                        if self.guest.isActive():
+                            flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
+
+                        if self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags) != 0:
+                            raise
+
+                    elif msg['action'] == 'migrate':
+
+                        # duri like qemu+ssh://destination_host/system
+                        if 'duri' not in msg:
+                            log = u'迁移操作缺少 duri 参数'
+                            raise KeyError(log)
+
+                        # https://rk4n.github.io/2016/08/10/qemu-post-copy-and-auto-converge-features/
+                        flags = libvirt.VIR_MIGRATE_PERSIST_DEST | \
+                            libvirt.VIR_MIGRATE_UNDEFINE_SOURCE | \
+                            libvirt.VIR_MIGRATE_COMPRESSED | \
+                            libvirt.VIR_MIGRATE_PEER2PEER | \
+                            libvirt.VIR_MIGRATE_AUTO_CONVERGE
+
+                        root = ET.fromstring(self.guest.XMLDesc())
+
+                        if msg['jimv_edition'] == JimVEdition.standalone.value:
+                            # 需要把磁盘存放路径加入到两边宿主机的存储池中
+                            # 不然将会报 no storage pool with matching target path '/opt/Images' 错误
+                            flags |= libvirt.VIR_MIGRATE_NON_SHARED_DISK
+                            flags |= libvirt.VIR_MIGRATE_LIVE
+
+                            if not self.guest.isActive():
+                                log = u'非共享存储不支持离线迁移。'
+                                logger.error(log)
+                                log_emit.error(log)
+                                raise
+
+                        elif msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                            if self.guest.isActive():
+                                flags |= libvirt.VIR_MIGRATE_LIVE
+                                flags |= libvirt.VIR_MIGRATE_TUNNELLED
+
+                            else:
+                                flags |= libvirt.VIR_MIGRATE_OFFLINE
+
+                            if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
+                                if msg['jimv_edition'] == JimVEdition.standalone.value:
+                                    # TODO: 把迁移过去该 Guest 的所有磁盘都删除
+                                    file_path = root.find('devices/disk[0]/source').attrib['file']
+                                    os.remove(file_path)
+
+                            else:
+                                raise
+
+                elif msg['_object'] == 'disk':
+                    if msg['action'] == 'create':
+
+                        if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                            if msg['dfs'] == DFS.glusterfs.value:
+
+                                if Guest.gf is None:
+                                    Guest.dfs_volume = msg['dfs_volume']
+                                    Guest.init_gfapi()
+
+                                if not Disk.make_qemu_image_by_glusterfs(gf=Guest.gf, dfs_volume=msg['dfs_volume'],
+                                                                         image_path=msg['image_path'], size=msg['size']):
+                                    raise
+
+                        elif msg['jimv_edition'] == JimVEdition.standalone.value:
+                            if not Disk.make_qemu_image_by_local(image_path=msg['image_path'], size=msg['size']):
+                                raise
+
+                    elif msg['action'] == 'delete':
+
+                        if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                            if msg['dfs'] == DFS.glusterfs.value:
+
+                                if Guest.gf is None:
+                                    Guest.dfs_volume = msg['dfs_volume']
+                                    Guest.init_gfapi()
+
+                                    if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']) \
+                                            is not None:
+                                        raise
+
+                        elif msg['jimv_edition'] == JimVEdition.standalone.value:
+                            if Disk.delete_qemu_image_by_local(image_path=msg['image_path']) is not None:
+                                raise
+
+                    elif msg['action'] == 'resize':
+
+                        if 'size' not in msg:
+                            log = u'添加磁盘缺少 disk 或 disk["size"] 参数'
+                            raise KeyError(log)
+
+                        # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
+                        msg['size'] = int(msg['size']) * 1024 * 1024
+
+                        used = False
+
+                        if msg['guest_uuid'].__len__() == 36:
+                            used = True
+
+                        if used:
+                            self.refresh_guest_mapping()
+
+                            if msg['guest_uuid'] not in self.guest_mapping_by_uuid:
+
+                                if config['debug']:
+                                    log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
+                                    logger.debug(log)
+                                    log_emit.debug(log)
+
+                                raise
+
+                            self.guest = self.guest_mapping_by_uuid[msg['guest_uuid']]
+                            if not isinstance(self.guest, libvirt.virDomain):
+                                raise
+
+                        # 在线磁盘扩容
+                        if used and self.guest.isActive():
+                                if 'device_node' not in msg:
+                                    log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
+                                    raise KeyError(log)
+
+                                if self.guest.blockResize(disk=msg['device_node'], size=msg['size']) != 0:
+                                    raise
+
+                        # 离线磁盘扩容
+                        else:
+                            if not all([key in msg for key in ['jimv_edition', 'dfs_volume', 'image_path']]):
+                                log = u'添加磁盘缺少 disk 或 disk["jimv_edition|dfs_volume|image_path|size"] 参数'
+                                raise KeyError(log)
+
+                            if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                                if msg['dfs'] == DFS.glusterfs.value:
+                                    if not Disk.resize_qemu_image_by_glusterfs(dfs_volume=msg['dfs_volume'],
+                                                                               image_path=msg['image_path'],
+                                                                               size=msg['size']):
+                                        raise
+
+                            elif msg['jimv_edition'] == JimVEdition.standalone.value:
+                                if not Disk.resize_qemu_image_by_local(image_path=msg['image_path'], size=msg['size']):
+                                    raise
 
                 else:
-                    log = u'未支持的 action：' + msg['action']
+                    log = u'未支持的 _object：' + msg['_object']
                     logger.error(log)
                     log_emit.error(log)
+
+                response_emit.success(_object=msg['_object'], action=msg['action'], uuid=msg['uuid'],
+                                      data=extend_data, passback_parameters=msg.get('passback_parameters'))
 
             except:
                 logger.error(traceback.format_exc())
                 log_emit.error(traceback.format_exc())
-                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
+                response_emit.failure(_object=msg['_object'], action=msg.get('action'), uuid=msg.get('uuid'),
                                       passback_parameters=msg.get('passback_parameters'))
 
     def update_interfaces(self):
