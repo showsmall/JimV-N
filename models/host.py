@@ -403,9 +403,6 @@ class Host(object):
                             log = u'添加磁盘缺少 disk 或 disk["size"] 参数'
                             raise KeyError(log)
 
-                        # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
-                        msg['size'] = int(msg['size']) * 1024 * 1024
-
                         used = False
 
                         if msg['guest_uuid'].__len__() == 36:
@@ -432,6 +429,9 @@ class Host(object):
                                 if 'device_node' not in msg:
                                     log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
                                     raise KeyError(log)
+
+                                # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
+                                msg['size'] = int(msg['size']) * 1024 * 1024
 
                                 if self.guest.blockResize(disk=msg['device_node'], size=msg['size']) != 0:
                                     raise
