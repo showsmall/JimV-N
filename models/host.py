@@ -353,14 +353,14 @@ class Host(object):
                             else:
                                 flags |= libvirt.VIR_MIGRATE_OFFLINE
 
-                            if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
-                                if msg['jimv_edition'] == JimVEdition.standalone.value:
-                                    # TODO: 把迁移过去该 Guest 的所有磁盘都删除
-                                    file_path = root.find('devices/disk[0]/source').attrib['file']
-                                    os.remove(file_path)
+                        if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
+                            if msg['jimv_edition'] == JimVEdition.standalone.value:
+                                # TODO: 把迁移过去该 Guest 的所有磁盘都删除
+                                file_path = root.find('devices/disk[0]/source').attrib['file']
+                                os.remove(file_path)
 
-                            else:
-                                raise
+                        else:
+                            raise
 
                 elif msg['_object'] == 'disk':
                     if msg['action'] == 'create':
