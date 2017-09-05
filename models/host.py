@@ -332,12 +332,17 @@ class Host(object):
                             libvirt.VIR_MIGRATE_AUTO_CONVERGE
 
                         root = ET.fromstring(self.guest.XMLDesc())
+                        devs = list()
 
                         if msg['jimv_edition'] == JimVEdition.standalone.value:
                             # 需要把磁盘存放路径加入到两边宿主机的存储池中
                             # 不然将会报 no storage pool with matching target path '/opt/Images' 错误
                             flags |= libvirt.VIR_MIGRATE_NON_SHARED_DISK
                             flags |= libvirt.VIR_MIGRATE_LIVE
+
+                            for disk in root.findall('devices/disk'):
+                                dev = disk.find('target').get('dev')
+                                devs.append(dev)
 
                             if not self.guest.isActive():
                                 log = u'非共享存储不支持离线迁移。'
@@ -353,14 +358,30 @@ class Host(object):
                             else:
                                 flags |= libvirt.VIR_MIGRATE_OFFLINE
 
-                        if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
+                        def clear_migrated_disk_file():
                             if msg['jimv_edition'] == JimVEdition.standalone.value:
-                                # TODO: 把迁移过去该 Guest 的所有磁盘都删除
-                                file_path = root.find('devices/disk[0]/source').attrib['file']
-                                os.remove(file_path)
+                                for _disk in root.findall('devices/disk'):
+                                    _file_path = _disk.find('source').get('file')
+                                    if file_path is not None:
+                                        os.remove(_file_path)
+
+                        # 只有单机版时才会统计devs
+                        if devs.__len__() > 1:
+                            if self.guest.migrateToURI3(
+                                    dconnuri=msg['duri'],
+                                    params={libvirt.VIR_MIGRATE_PARAM_MIGRATE_DISKS: ','.join(devs)},
+                                    flags=flags) == 0:
+                                clear_migrated_disk_file()
+
+                            else:
+                                raise
 
                         else:
-                            raise
+                            if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
+                                clear_migrated_disk_file()
+
+                            else:
+                                raise
 
                 elif msg['_object'] == 'disk':
                     if msg['action'] == 'create':
