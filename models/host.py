@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 import uuid
 
 import psutil
+import paramiko
 
 from jimvn_exception import ConnFailed
 
@@ -52,12 +53,20 @@ class Host(object):
         self.last_guest_traffic = dict()
         self.last_guest_disk_io = dict()
         self.ts = ji.Common.ts()
+        self.ssh_client = None
 
     def init_conn(self):
         self.conn = libvirt.open()
 
         if self.conn is None:
             raise ConnFailed(u'打开连接失败 --> ' + sys.stderr)
+
+    def init_ssh_client(self, hostname, user):
+        self.ssh_client = paramiko.SSHClient()
+        self.ssh_client.load_system_host_keys()
+        self.ssh_client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
+        self.ssh_client.connect(hostname=hostname, username=user)
+        return True
 
     def refresh_guest_mapping(self):
         # 调用该方法的函数，都为单独的对象实例。即不存在多线程共用该方法，故而不用加多线程锁
@@ -174,9 +183,9 @@ class Host(object):
                         if msg['uuid'] not in self.guest_mapping_by_uuid:
 
                             if config['debug']:
-                                log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
-                                logger.debug(log)
-                                log_emit.debug(log)
+                                _log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
+                                logger.debug(_log)
+                                log_emit.debug(_log)
 
                             raise
 
@@ -293,8 +302,8 @@ class Host(object):
                     elif msg['action'] == 'attach_disk':
 
                         if 'xml' not in msg:
-                            log = u'添加磁盘缺少 xml 参数'
-                            raise KeyError(log)
+                            _log = u'添加磁盘缺少 xml 参数'
+                            raise KeyError(_log)
 
                         flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
                         if self.guest.isActive():
@@ -307,8 +316,8 @@ class Host(object):
                     elif msg['action'] == 'detach_disk':
 
                         if 'xml' not in msg:
-                            log = u'分离磁盘缺少 xml 参数'
-                            raise KeyError(log)
+                            _log = u'分离磁盘缺少 xml 参数'
+                            raise KeyError(_log)
 
                         flags = libvirt.VIR_DOMAIN_AFFECT_CONFIG
                         if self.guest.isActive():
@@ -321,8 +330,8 @@ class Host(object):
 
                         # duri like qemu+ssh://destination_host/system
                         if 'duri' not in msg:
-                            log = u'迁移操作缺少 duri 参数'
-                            raise KeyError(log)
+                            _log = u'迁移操作缺少 duri 参数'
+                            raise KeyError(_log)
 
                         # https://rk4n.github.io/2016/08/10/qemu-post-copy-and-auto-converge-features/
                         flags = libvirt.VIR_MIGRATE_PERSIST_DEST | \
@@ -332,7 +341,6 @@ class Host(object):
                             libvirt.VIR_MIGRATE_AUTO_CONVERGE
 
                         root = ET.fromstring(self.guest.XMLDesc())
-                        devs = list()
 
                         if msg['jimv_edition'] == JimVEdition.standalone.value:
                             # 需要把磁盘存放路径加入到两边宿主机的存储池中
@@ -340,15 +348,27 @@ class Host(object):
                             flags |= libvirt.VIR_MIGRATE_NON_SHARED_DISK
                             flags |= libvirt.VIR_MIGRATE_LIVE
 
-                            for disk in root.findall('devices/disk'):
-                                dev = disk.find('target').get('dev')
-                                devs.append(dev)
-
                             if not self.guest.isActive():
-                                log = u'非共享存储不支持离线迁移。'
-                                logger.error(log)
-                                log_emit.error(log)
+                                _log = u'非共享存储不支持离线迁移。'
+                                logger.error(_log)
+                                log_emit.error(_log)
                                 raise
+
+                            if self.init_ssh_client(hostname=msg['duri'].split('/')[2], user='root'):
+                                for _disk in root.findall('devices/disk'):
+                                    _file_path = _disk.find('source').get('file')
+                                    disk_info = Disk.disk_info_by_local(image_path=_file_path)
+                                    disk_size = disk_info['virtual-size']
+                                    stdin, stdout, stderr = self.ssh_client.exec_command(
+                                        ' '.join(['qemu-img', 'create', '-f', 'qcow2', _file_path, str(disk_size)]))
+
+                                    for line in stdout:
+                                        logger.info(line)
+                                        log_emit.info(line)
+
+                                    for line in stderr:
+                                        logger.error(line)
+                                        log_emit.error(line)
 
                         elif msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
                             if self.guest.isActive():
@@ -358,30 +378,15 @@ class Host(object):
                             else:
                                 flags |= libvirt.VIR_MIGRATE_OFFLINE
 
-                        def clear_migrated_disk_file():
+                        if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
                             if msg['jimv_edition'] == JimVEdition.standalone.value:
                                 for _disk in root.findall('devices/disk'):
                                     _file_path = _disk.find('source').get('file')
-                                    if file_path is not None:
+                                    if _file_path is not None:
                                         os.remove(_file_path)
 
-                        # 只有单机版时才会统计devs
-                        if devs.__len__() > 1:
-                            if self.guest.migrateToURI3(
-                                    dconnuri=msg['duri'],
-                                    params={libvirt.VIR_MIGRATE_PARAM_MIGRATE_DISKS: ','.join(devs)},
-                                    flags=flags) == 0:
-                                clear_migrated_disk_file()
-
-                            else:
-                                raise
-
                         else:
-                            if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
-                                clear_migrated_disk_file()
-
-                            else:
-                                raise
+                            raise
 
                 elif msg['_object'] == 'disk':
                     if msg['action'] == 'create':
@@ -421,8 +426,8 @@ class Host(object):
                     elif msg['action'] == 'resize':
 
                         if 'size' not in msg:
-                            log = u'添加磁盘缺少 disk 或 disk["size"] 参数'
-                            raise KeyError(log)
+                            _log = u'添加磁盘缺少 disk 或 disk["size"] 参数'
+                            raise KeyError(_log)
 
                         used = False
 
@@ -435,9 +440,9 @@ class Host(object):
                             if msg['guest_uuid'] not in self.guest_mapping_by_uuid:
 
                                 if config['debug']:
-                                    log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
-                                    logger.debug(log)
-                                    log_emit.debug(log)
+                                    _log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
+                                    logger.debug(_log)
+                                    log_emit.debug(_log)
 
                                 raise
 
@@ -448,8 +453,8 @@ class Host(object):
                         # 在线磁盘扩容
                         if used and self.guest.isActive():
                                 if 'device_node' not in msg:
-                                    log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
-                                    raise KeyError(log)
+                                    _log = u'添加磁盘缺少 disk 或 disk["device_node|size"] 参数'
+                                    raise KeyError(_log)
 
                                 # 磁盘大小默认单位为KB，乘以两个 1024，使其单位达到GB
                                 msg['size'] = int(msg['size']) * 1024 * 1024
@@ -460,8 +465,8 @@ class Host(object):
                         # 离线磁盘扩容
                         else:
                             if not all([key in msg for key in ['jimv_edition', 'dfs_volume', 'image_path']]):
-                                log = u'添加磁盘缺少 disk 或 disk["jimv_edition|dfs_volume|image_path|size"] 参数'
-                                raise KeyError(log)
+                                _log = u'添加磁盘缺少 disk 或 disk["jimv_edition|dfs_volume|image_path|size"] 参数'
+                                raise KeyError(_log)
 
                             if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
                                 if msg['dfs'] == DFS.glusterfs.value:
@@ -475,9 +480,9 @@ class Host(object):
                                     raise
 
                 else:
-                    log = u'未支持的 _object：' + msg['_object']
-                    logger.error(log)
-                    log_emit.error(log)
+                    _log = u'未支持的 _object：' + msg['_object']
+                    logger.error(_log)
+                    log_emit.error(_log)
 
                 response_emit.success(_object=msg['_object'], action=msg['action'], uuid=msg['uuid'],
                                       data=extend_data, passback_parameters=msg.get('passback_parameters'))
