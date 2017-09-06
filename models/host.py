@@ -23,7 +23,7 @@ from initialize import config, logger, r, log_emit, response_emit, host_event_em
 from guest import Guest
 from disk import Disk
 from utils import Utils
-from status import JimVEdition, DFS
+from status import JimVEdition, StorageMode
 
 
 __author__ = 'James Iter'
@@ -195,17 +195,15 @@ class Host(object):
 
                     if msg['action'] == 'create':
 
-                        Guest.jimv_edition = msg['jimv_edition']
+                        Guest.storage_mode = msg['storage_mode']
 
                         self.guest = Guest(uuid=msg['uuid'], name=msg['name'], template_path=msg['template_path'],
                                            disk=msg['disk'], xml=msg['xml'])
 
-                        if Guest.jimv_edition == JimVEdition.hyper_convergence.value:
-                            Guest.dfs = msg['dfs']
-                            if Guest.dfs == DFS.glusterfs.value:
-                                if Guest.gf is None:
-                                    Guest.dfs_volume = msg['dfs_volume']
-                                    Guest.init_gfapi()
+                        if Guest.storage_mode == StorageMode.glusterfs.value:
+                            if Guest.gf is None:
+                                Guest.dfs_volume = msg['dfs_volume']
+                                Guest.init_gfapi()
 
                         self.guest.system_image_path = self.guest.disk['path']
 
@@ -223,12 +221,11 @@ class Host(object):
 
                         disk_info = dict()
 
-                        if Guest.jimv_edition == JimVEdition.hyper_convergence.value:
-                            if Guest.dfs == DFS.glusterfs.value:
-                                disk_info = Disk.disk_info_by_glusterfs(dfs_volume=self.guest.dfs_volume,
-                                                                        image_path=self.guest.system_image_path)
+                        if Guest.storage_mode == StorageMode.glusterfs.value:
+                            disk_info = Disk.disk_info_by_glusterfs(dfs_volume=self.guest.dfs_volume,
+                                                                    image_path=self.guest.system_image_path)
 
-                        else:
+                        elif Guest.storage_mode in [StorageMode.local.value, StorageMode.shared_mount.value]:
                             disk_info = Disk.disk_info_by_local(image_path=self.guest.system_image_path)
 
                         # 由该线程最顶层的异常捕获机制，处理其抛出的异常
@@ -282,11 +279,11 @@ class Host(object):
 
                         self.guest.undefine()
 
-                        if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                        if msg['storage_mode'] in [StorageMode.ceph.value, StorageMode.glusterfs.value]:
                             # 签出系统镜像路径
                             path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
 
-                        if msg['dfs'] == DFS.glusterfs.value:
+                        if msg['storage_mode'] == StorageMode.glusterfs.value:
                             if Guest.gf is None:
                                 Guest.dfs_volume = path_list[0]
                                 Guest.init_gfapi()
@@ -294,7 +291,7 @@ class Host(object):
                                         Guest.gf.remove('/'.join(path_list[1:])) is not None:
                                     raise
 
-                        elif msg['jimv_edition'] == JimVEdition.standalone.value:
+                        elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                             file_path = root.find('devices/disk[0]/source').attrib['file']
                             if not os.path.isfile(file_path) or os.remove(file_path) is not None:
                                 raise
@@ -342,7 +339,7 @@ class Host(object):
 
                         root = ET.fromstring(self.guest.XMLDesc())
 
-                        if msg['jimv_edition'] == JimVEdition.standalone.value:
+                        if msg['storage_mode'] == StorageMode.local.value:
                             # 需要把磁盘存放路径加入到两边宿主机的存储池中
                             # 不然将会报 no storage pool with matching target path '/opt/Images' 错误
                             flags |= libvirt.VIR_MIGRATE_NON_SHARED_DISK
@@ -370,7 +367,8 @@ class Host(object):
                                         logger.error(line)
                                         log_emit.error(line)
 
-                        elif msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
+                        elif msg['storage_mode'] in [StorageMode.shared_mount.value, StorageMode.ceph.value,
+                                                     StorageMode.glusterfs.value]:
                             if self.guest.isActive():
                                 flags |= libvirt.VIR_MIGRATE_LIVE
                                 flags |= libvirt.VIR_MIGRATE_TUNNELLED
@@ -379,7 +377,7 @@ class Host(object):
                                 flags |= libvirt.VIR_MIGRATE_OFFLINE
 
                         if self.guest.migrateToURI(duri=msg['duri'], flags=flags) == 0:
-                            if msg['jimv_edition'] == JimVEdition.standalone.value:
+                            if msg['storage_mode'] == StorageMode.local.value:
                                 for _disk in root.findall('devices/disk'):
                                     _file_path = _disk.find('source').get('file')
                                     if _file_path is not None:
@@ -391,35 +389,33 @@ class Host(object):
                 elif msg['_object'] == 'disk':
                     if msg['action'] == 'create':
 
-                        if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
-                            if msg['dfs'] == DFS.glusterfs.value:
+                        if msg['storage_mode'] == StorageMode.glusterfs.value:
 
-                                if Guest.gf is None:
-                                    Guest.dfs_volume = msg['dfs_volume']
-                                    Guest.init_gfapi()
+                            if Guest.gf is None:
+                                Guest.dfs_volume = msg['dfs_volume']
+                                Guest.init_gfapi()
 
-                                if not Disk.make_qemu_image_by_glusterfs(gf=Guest.gf, dfs_volume=msg['dfs_volume'],
-                                                                         image_path=msg['image_path'], size=msg['size']):
-                                    raise
+                            if not Disk.make_qemu_image_by_glusterfs(gf=Guest.gf, dfs_volume=msg['dfs_volume'],
+                                                                     image_path=msg['image_path'], size=msg['size']):
+                                raise
 
-                        elif msg['jimv_edition'] == JimVEdition.standalone.value:
+                        elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                             if not Disk.make_qemu_image_by_local(image_path=msg['image_path'], size=msg['size']):
                                 raise
 
                     elif msg['action'] == 'delete':
 
-                        if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
-                            if msg['dfs'] == DFS.glusterfs.value:
+                        if msg['storage_mode'] == StorageMode.glusterfs.value:
 
-                                if Guest.gf is None:
-                                    Guest.dfs_volume = msg['dfs_volume']
-                                    Guest.init_gfapi()
+                            if Guest.gf is None:
+                                Guest.dfs_volume = msg['dfs_volume']
+                                Guest.init_gfapi()
 
-                                    if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']) \
-                                            is not None:
-                                        raise
+                                if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']) \
+                                        is not None:
+                                    raise
 
-                        elif msg['jimv_edition'] == JimVEdition.standalone.value:
+                        elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                             if Disk.delete_qemu_image_by_local(image_path=msg['image_path']) is not None:
                                 raise
 
@@ -464,18 +460,17 @@ class Host(object):
 
                         # 离线磁盘扩容
                         else:
-                            if not all([key in msg for key in ['jimv_edition', 'dfs_volume', 'image_path']]):
-                                _log = u'添加磁盘缺少 disk 或 disk["jimv_edition|dfs_volume|image_path|size"] 参数'
+                            if not all([key in msg for key in ['storage_mode', 'dfs_volume', 'image_path']]):
+                                _log = u'添加磁盘缺少 disk 或 disk["storage_mode|dfs_volume|image_path|size"] 参数'
                                 raise KeyError(_log)
 
-                            if msg['jimv_edition'] == JimVEdition.hyper_convergence.value:
-                                if msg['dfs'] == DFS.glusterfs.value:
-                                    if not Disk.resize_qemu_image_by_glusterfs(dfs_volume=msg['dfs_volume'],
-                                                                               image_path=msg['image_path'],
-                                                                               size=msg['size']):
-                                        raise
+                            if msg['storage_mode'] == StorageMode.glusterfs.value:
+                                if not Disk.resize_qemu_image_by_glusterfs(dfs_volume=msg['dfs_volume'],
+                                                                           image_path=msg['image_path'],
+                                                                           size=msg['size']):
+                                    raise
 
-                            elif msg['jimv_edition'] == JimVEdition.standalone.value:
+                            elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                                 if not Disk.resize_qemu_image_by_local(image_path=msg['image_path'], size=msg['size']):
                                     raise
 

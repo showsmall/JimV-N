@@ -11,7 +11,7 @@ from gluster import gfapi
 import xml.etree.ElementTree as ET
 
 from initialize import logger, log_emit, guest_event_emit
-from models.status import OperateRuleKind, JimVEdition, DFS
+from models.status import OperateRuleKind, JimVEdition, StorageMode
 
 
 __author__ = 'James Iter'
@@ -22,7 +22,7 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 class Guest(object):
     jimv_edition = None
-    dfs = None
+    storage_mode = None
     gf = None
     dfs_volume = None
 
@@ -47,8 +47,8 @@ class Guest(object):
         cls.gf.mount()
 
     def generate_system_image(self):
-        if self.jimv_edition == JimVEdition.hyper_convergence.value:
-            if self.dfs == DFS.glusterfs.value:
+        if self.storage_mode in [StorageMode.ceph.value, StorageMode.glusterfs.value]:
+            if self.storage_mode == StorageMode.glusterfs.value:
                 if not self.gf.isfile(self.template_path):
                     log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'所依赖的模板', self.template_path, u'不存在.'])
                     logger.error(msg=log)
@@ -60,7 +60,7 @@ class Guest(object):
 
                 self.gf.copyfile(self.template_path, self.system_image_path)
 
-        else:
+        elif self.storage_mode in [StorageMode.local.value, StorageMode.shared_mount.value]:
             if not os.path.exists(self.template_path) or not os.path.isfile(self.template_path):
                 log = u' '.join([u'域', self.name, u', UUID', self.uuid, u'所依赖的模板', self.template_path, u'不存在.'])
                 logger.error(msg=log)
@@ -84,6 +84,9 @@ class Guest(object):
 
             shutil.copyfile(self.template_path, self.system_image_path)
 
+        else:
+            raise
+
         return True
 
     def execute_boot_jobs(self, guest=None, boot_jobs=None):
@@ -96,7 +99,7 @@ class Guest(object):
         self.xml = guest.XMLDesc()
         root = ET.fromstring(self.xml)
 
-        if self.jimv_edition == JimVEdition.hyper_convergence.value:
+        if self.storage_mode in [StorageMode.ceph.value, StorageMode.glusterfs.value]:
             for dev in root.findall('devices/disk'):
                 filename = dev.find('source').get('name')
                 _format = dev.find('driver').attrib['type']
@@ -104,7 +107,7 @@ class Guest(object):
                 server = dev.find('source/host').get('name')
                 self.g.add_drive(filename=filename, format=_format, protocol=protocol, server=[server])
 
-        else:
+        elif self.storage_mode in [StorageMode.local.value, StorageMode.shared_mount.value]:
             for dev in root.findall('devices/disk'):
                 filename = dev.find('source').get('file')
                 _format = dev.find('driver').attrib['type']

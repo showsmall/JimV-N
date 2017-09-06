@@ -16,9 +16,11 @@ class JimVEdition(IntEnum):
     hyper_convergence = 1
 
 
-class DFS(IntEnum):
-    ceph = 0
-    glusterfs = 1
+class StorageMode(IntEnum):
+    local = 0
+    shared_mount = 1
+    ceph = 2
+    glusterfs = 3
 
 
 class EmitKind(IntEnum):
