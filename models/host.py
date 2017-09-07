@@ -418,9 +418,9 @@ class Host(object):
                                 Guest.dfs_volume = msg['dfs_volume']
                                 Guest.init_gfapi()
 
-                                if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']) \
-                                        is not None:
-                                    raise
+                            if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']) \
+                                    is not None:
+                                raise
 
                         elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                             if Disk.delete_qemu_image_by_local(image_path=msg['image_path']) is not None:
