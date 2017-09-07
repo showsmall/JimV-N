@@ -279,9 +279,15 @@ class Host(object):
 
                         self.guest.undefine()
 
+                        system_disk = None
+
+                        for _disk in root.findall('devices/disk'):
+                            if 'vda' == _disk.find('target').get('dev'):
+                                system_disk = _disk
+
                         if msg['storage_mode'] in [StorageMode.ceph.value, StorageMode.glusterfs.value]:
                             # 签出系统镜像路径
-                            path_list = root.find('devices/disk[0]/source').attrib['name'].split('/')
+                            path_list = system_disk.find('source').attrib['name'].split('/')
 
                         if msg['storage_mode'] == StorageMode.glusterfs.value:
                             if Guest.gf is None:
@@ -292,7 +298,7 @@ class Host(object):
                                     raise
 
                         elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
-                            file_path = root.find('devices/disk[0]/source').attrib['file']
+                            file_path = system_disk.find('source').attrib['file']
                             if not os.path.isfile(file_path) or os.remove(file_path) is not None:
                                 raise
 
