@@ -23,7 +23,7 @@ from initialize import config, logger, r, log_emit, response_emit, host_event_em
 from guest import Guest
 from disk import Disk
 from utils import Utils
-from status import JimVEdition, StorageMode
+from status import StorageMode
 
 
 __author__ = 'James Iter'
