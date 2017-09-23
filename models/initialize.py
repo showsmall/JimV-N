@@ -11,6 +11,7 @@ import json
 import getopt
 import redis
 import jimit as ji
+import Queue
 
 from jimvn_exception import PathNotExist
 from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit
@@ -107,6 +108,7 @@ config = Init.load_config()
 logger = Init.init_logger()
 r = Init.redis_init_conn()
 assert isinstance(r, redis.StrictRedis)
+q_creating_guest = Queue.Queue()
 
 host_cpu_count = multiprocessing.cpu_count()
 

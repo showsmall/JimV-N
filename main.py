@@ -40,6 +40,12 @@ if __name__ == '__main__':
                                   args=())
             threads.append(t_)
 
+            guest_creating_progress_report_engine_engine = Host()
+            guest_creating_progress_report_engine_engine.init_conn()
+            t_ = threading.Thread(
+                target=guest_creating_progress_report_engine_engine.guest_creating_progress_report_engine, args=())
+            threads.append(t_)
+
             host_use_for_guest_operate_engine = Host()
             host_use_for_guest_operate_engine.init_conn()
             t_ = threading.Thread(target=host_use_for_guest_operate_engine.guest_operate_engine, args=())

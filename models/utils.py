@@ -83,10 +83,11 @@ class GuestEventEmit(Emit):
     def __init__(self):
         super(GuestEventEmit, self).__init__()
 
-    def emit2(self, _type=None, uuid=None, migrating_info=None, xml=None):
+    def emit2(self, _type=None, uuid=None, migrating_info=None, xml=None, progress=None):
         return self.emit(_kind=EmitKind.guest_event.value, _type=_type, message={'uuid': uuid,
                                                                                  'migrating_info': migrating_info,
-                                                                                 'xml': xml})
+                                                                                 'xml': xml,
+                                                                                 'progress': progress})
 
     def no_state(self, uuid):
         return self.emit2(_type=GuestState.no_state.value, uuid=uuid)
@@ -117,6 +118,9 @@ class GuestEventEmit(Emit):
 
     def update(self, uuid, xml):
         return self.emit2(_type=GuestState.update.value, uuid=uuid, xml=xml)
+
+    def creating(self, uuid, progress):
+        return self.emit2(_type=GuestState.creating.value, uuid=uuid, progress=progress)
 
 
 class HostEventEmit(Emit):

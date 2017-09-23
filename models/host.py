@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import traceback
+import Queue
 
 import libvirt
 import json
@@ -19,7 +20,7 @@ import paramiko
 from jimvn_exception import ConnFailed
 
 from initialize import config, logger, r, log_emit, response_emit, host_event_emit, collection_performance_emit, \
-    thread_status, host_collection_performance_emit
+    thread_status, host_collection_performance_emit, guest_event_emit, q_creating_guest
 from guest import Guest
 from disk import Disk
 from utils import Utils
@@ -210,11 +211,21 @@ class Host(object):
                         # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
                         self.dirty_scene = True
 
+                        q_creating_guest.put({
+                            'storage_mode': Guest.storage_mode,
+                            'dfs_volume': Guest.dfs_volume,
+                            'uuid': self.guest.uuid,
+                            'template_path': self.guest.template_path,
+                            'system_image_path': self.guest.system_image_path
+                        })
+
                         if not self.guest.generate_system_image():
                             raise
 
                         if not self.guest.define_by_xml(conn=self.conn):
                             raise
+
+                        guest_event_emit.creating(uuid=self.guest.uuid, progress=92)
 
                         # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
                         self.dirty_scene = False
@@ -234,6 +245,7 @@ class Host(object):
 
                         extend_data.update({'disk_info': disk_info})
 
+                        guest_event_emit.creating(uuid=self.guest.uuid, progress=97)
                         if not self.guest.start_by_uuid(conn=self.conn):
                             # 不清理现场，如需清理，让用户手动通过面板删除
                             continue
@@ -494,6 +506,67 @@ class Host(object):
                 log_emit.error(traceback.format_exc())
                 response_emit.failure(_object=msg['_object'], action=msg.get('action'), uuid=msg.get('uuid'),
                                       passback_parameters=msg.get('passback_parameters'))
+
+    @staticmethod
+    def guest_creating_progress_report_engine():
+        """
+        Guest 创建进度上班引擎
+        """
+        list_creating_guest = list()
+        template_size = dict()
+
+        while True:
+            if Utils.exit_flag:
+                print 'Thread guest_creating_progress_report_engine say bye-bye'
+                return
+
+            # noinspection PyBroadException
+            try:
+                try:
+                    payload = q_creating_guest.get(timeout=1)
+                    list_creating_guest.append(payload)
+                    q_creating_guest.task_done()
+                except Queue.Empty as e:
+                    pass
+
+                for i, guest in enumerate(list_creating_guest):
+
+                    template_path = guest['template_path']
+                    progress = 0
+
+                    if guest['storage_mode'] in [StorageMode.ceph.value, StorageMode.glusterfs.value]:
+                        if guest['storage_mode'] == StorageMode.glusterfs.value:
+                            if template_path not in template_size:
+                                # 创建 Guest，到此处，Guest.gf 必定已经被初始化过了，参见创建 Guest 的代码
+                                # if Guest.gf is None:
+                                #     Guest.dfs_volume = msg['dfs_volume']
+                                #     Guest.init_gfapi()
+                                template_size[template_path] = float(Guest.gf.getsize(template_path))
+
+                            system_image_size = Guest.gf.getsize(guest['system_image_path'])
+                            progress = system_image_size / template_size[template_path]
+
+                    elif guest['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
+                        if template_path not in template_size:
+                            template_size[template_path] = float(os.path.getsize(template_path))
+
+                        system_image_size = os.path.getsize(guest['system_image_path'])
+                        progress = system_image_size / template_size[template_path]
+
+                    else:
+                        del list_creating_guest[i]
+                        log = u' '.join([u'UUID: ', guest['uuid'], u'未支持的存储模式: ', str(guest['storage_mode'])])
+                        logger.error(log)
+                        log_emit.error(log)
+
+                    guest_event_emit.creating(uuid=guest['uuid'], progress=int(progress * 90))
+
+                    if progress == 1:
+                        del list_creating_guest[i]
+
+            except:
+                logger.error(traceback.format_exc())
+                log_emit.error(traceback.format_exc())
 
     def update_interfaces(self):
         self.interfaces.clear()
