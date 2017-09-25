@@ -317,14 +317,17 @@ class Host(object):
                                 Guest.dfs_volume = path_list[0]
                                 Guest.init_gfapi()
 
-                            if not Guest.gf.exists('/'.join(path_list[1:])) or \
-                                    Guest.gf.remove('/'.join(path_list[1:])) is not None:
-                                raise
+                            try:
+                                Guest.gf.remove('/'.join(path_list[1:]))
+                            except OSError:
+                                pass
 
                         elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                             file_path = system_disk.find('source').attrib['file']
-                            if not os.path.isfile(file_path) or os.remove(file_path) is not None:
-                                raise
+                            try:
+                                os.remove(file_path)
+                            except OSError:
+                                pass
 
                     elif msg['action'] == 'attach_disk':
 

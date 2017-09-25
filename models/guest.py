@@ -7,11 +7,12 @@ import shutil
 
 import guestfs
 import libvirt
+import threading
 from gluster import gfapi
 import xml.etree.ElementTree as ET
 
 from initialize import logger, log_emit, guest_event_emit
-from models.status import OperateRuleKind, JimVEdition, StorageMode
+from models.status import OperateRuleKind, StorageMode
 
 
 __author__ = 'James Iter'
@@ -25,6 +26,7 @@ class Guest(object):
     storage_mode = None
     gf = None
     dfs_volume = None
+    thread_mutex_lock = threading.Lock()
 
     def __init__(self, **kwargs):
         self.uuid = kwargs.get('uuid', None)
@@ -43,8 +45,15 @@ class Guest(object):
 
     @classmethod
     def init_gfapi(cls):
-        cls.gf = gfapi.Volume('127.0.0.1', cls.dfs_volume)
-        cls.gf.mount()
+        cls.thread_mutex_lock.acquire()
+
+        if cls.gf is None:
+            cls.gf = gfapi.Volume('127.0.0.1', cls.dfs_volume)
+            cls.gf.mount()
+
+        cls.thread_mutex_lock.release()
+
+        return cls.gf
 
     def generate_system_image(self):
         if self.storage_mode in [StorageMode.ceph.value, StorageMode.glusterfs.value]:
