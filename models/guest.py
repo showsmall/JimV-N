@@ -4,6 +4,7 @@
 
 import os
 import shutil
+import traceback
 
 import guestfs
 import libvirt
@@ -11,8 +12,9 @@ import threading
 from gluster import gfapi
 import xml.etree.ElementTree as ET
 
-from initialize import logger, log_emit, guest_event_emit
+from initialize import logger, log_emit, guest_event_emit, q_creating_guest, response_emit
 from models.status import OperateRuleKind, StorageMode
+from disk import Disk
 
 
 __author__ = 'James Iter'
@@ -238,4 +240,63 @@ class Guest(object):
         else:
             guest_event_emit.update(uuid=guest.UUIDString(), xml=xml)
 
+    @staticmethod
+    def create(conn, msg):
 
+        try:
+            Guest.storage_mode = msg['storage_mode']
+
+            guest = Guest(uuid=msg['uuid'], name=msg['name'], template_path=msg['template_path'],
+                          disk=msg['disk'], xml=msg['xml'])
+
+            if Guest.storage_mode == StorageMode.glusterfs.value:
+                Guest.dfs_volume = msg['dfs_volume']
+                Guest.init_gfapi()
+
+            guest.system_image_path = guest.disk['path']
+
+            q_creating_guest.put({
+                'storage_mode': Guest.storage_mode,
+                'dfs_volume': Guest.dfs_volume,
+                'uuid': guest.uuid,
+                'template_path': guest.template_path,
+                'system_image_path': guest.system_image_path
+            })
+
+            if not guest.generate_system_image():
+                raise
+
+            if not guest.define_by_xml(conn=conn):
+                raise
+
+            guest_event_emit.creating(uuid=guest.uuid, progress=92)
+
+            disk_info = dict()
+
+            if Guest.storage_mode == StorageMode.glusterfs.value:
+                disk_info = Disk.disk_info_by_glusterfs(dfs_volume=guest.dfs_volume,
+                                                        image_path=guest.system_image_path)
+
+            elif Guest.storage_mode in [StorageMode.local.value, StorageMode.shared_mount.value]:
+                disk_info = Disk.disk_info_by_local(image_path=guest.system_image_path)
+
+            # 由该线程最顶层的异常捕获机制，处理其抛出的异常
+            guest.execute_boot_jobs(guest=conn.lookupByUUIDString(uuidstr=guest.uuid),
+                                    boot_jobs=msg['boot_jobs'])
+
+            extend_data = dict()
+            extend_data.update({'disk_info': disk_info})
+
+            guest_event_emit.creating(uuid=guest.uuid, progress=97)
+
+            if not guest.start_by_uuid(conn=conn):
+                raise
+
+            response_emit.success(_object=msg['_object'], action=msg['action'], uuid=msg['uuid'],
+                                  data=extend_data, passback_parameters=msg.get('passback_parameters'))
+
+        except:
+            logger.error(traceback.format_exc())
+            log_emit.error(traceback.format_exc())
+            response_emit.failure(_object=msg['_object'], action=msg.get('action'), uuid=msg.get('uuid'),
+                                  passback_parameters=msg.get('passback_parameters'))
