@@ -139,9 +139,8 @@ class Host(object):
                           disk=msg['disk'], xml=msg['xml'])
 
             if Guest.storage_mode == StorageMode.glusterfs.value:
-                if Guest.gf is None:
-                    Guest.dfs_volume = msg['dfs_volume']
-                    Guest.init_gfapi()
+                Guest.dfs_volume = msg['dfs_volume']
+                Guest.init_gfapi()
 
             guest.system_image_path = guest.disk['path']
 
@@ -313,9 +312,8 @@ class Host(object):
                             path_list = system_disk.find('source').attrib['name'].split('/')
 
                         if msg['storage_mode'] == StorageMode.glusterfs.value:
-                            if Guest.gf is None:
-                                Guest.dfs_volume = path_list[0]
-                                Guest.init_gfapi()
+                            Guest.dfs_volume = path_list[0]
+                            Guest.init_gfapi()
 
                             try:
                                 Guest.gf.remove('/'.join(path_list[1:]))
@@ -423,10 +421,8 @@ class Host(object):
                     if msg['action'] == 'create':
 
                         if msg['storage_mode'] == StorageMode.glusterfs.value:
-
-                            if Guest.gf is None:
-                                Guest.dfs_volume = msg['dfs_volume']
-                                Guest.init_gfapi()
+                            Guest.dfs_volume = msg['dfs_volume']
+                            Guest.init_gfapi()
 
                             if not Disk.make_qemu_image_by_glusterfs(gf=Guest.gf, dfs_volume=msg['dfs_volume'],
                                                                      image_path=msg['image_path'], size=msg['size']):
@@ -439,10 +435,8 @@ class Host(object):
                     elif msg['action'] == 'delete':
 
                         if msg['storage_mode'] == StorageMode.glusterfs.value:
-
-                            if Guest.gf is None:
-                                Guest.dfs_volume = msg['dfs_volume']
-                                Guest.init_gfapi()
+                            Guest.dfs_volume = msg['dfs_volume']
+                            Guest.init_gfapi()
 
                             if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']) \
                                     is not None:
@@ -524,7 +518,7 @@ class Host(object):
     @staticmethod
     def guest_creating_progress_report_engine():
         """
-        Guest 创建进度上班引擎
+        Guest 创建进度上报引擎
         """
         list_creating_guest = list()
         template_size = dict()
@@ -551,10 +545,8 @@ class Host(object):
                     if guest['storage_mode'] in [StorageMode.ceph.value, StorageMode.glusterfs.value]:
                         if guest['storage_mode'] == StorageMode.glusterfs.value:
                             if template_path not in template_size:
-
-                                if Guest.gf is None:
-                                    Guest.dfs_volume = guest['dfs_volume']
-                                    Guest.init_gfapi()
+                                Guest.dfs_volume = guest['dfs_volume']
+                                Guest.init_gfapi()
 
                                 template_size[template_path] = float(Guest.gf.getsize(template_path))
 
