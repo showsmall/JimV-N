@@ -16,6 +16,7 @@ import uuid
 
 import psutil
 import paramiko
+import thread
 
 from jimvn_exception import ConnFailed
 
@@ -128,6 +129,68 @@ class Host(object):
                 response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
                                       passback_parameters=msg.get('passback_parameters'))
 
+    @staticmethod
+    def create_guest(conn, msg):
+
+        try:
+            Guest.storage_mode = msg['storage_mode']
+
+            guest = Guest(uuid=msg['uuid'], name=msg['name'], template_path=msg['template_path'],
+                          disk=msg['disk'], xml=msg['xml'])
+
+            if Guest.storage_mode == StorageMode.glusterfs.value:
+                if Guest.gf is None:
+                    Guest.dfs_volume = msg['dfs_volume']
+                    Guest.init_gfapi()
+
+            guest.system_image_path = guest.disk['path']
+
+            q_creating_guest.put({
+                'storage_mode': Guest.storage_mode,
+                'dfs_volume': Guest.dfs_volume,
+                'uuid': guest.uuid,
+                'template_path': guest.template_path,
+                'system_image_path': guest.system_image_path
+            })
+
+            if not guest.generate_system_image():
+                raise
+
+            if not guest.define_by_xml(conn=conn):
+                raise
+
+            guest_event_emit.creating(uuid=guest.uuid, progress=92)
+
+            disk_info = dict()
+
+            if Guest.storage_mode == StorageMode.glusterfs.value:
+                disk_info = Disk.disk_info_by_glusterfs(dfs_volume=guest.dfs_volume,
+                                                        image_path=guest.system_image_path)
+
+            elif Guest.storage_mode in [StorageMode.local.value, StorageMode.shared_mount.value]:
+                disk_info = Disk.disk_info_by_local(image_path=guest.system_image_path)
+
+            # 由该线程最顶层的异常捕获机制，处理其抛出的异常
+            guest.execute_boot_jobs(guest=conn.lookupByUUIDString(uuidstr=guest.uuid),
+                                    boot_jobs=msg['boot_jobs'])
+
+            extend_data = dict()
+            extend_data.update({'disk_info': disk_info})
+
+            guest_event_emit.creating(uuid=guest.uuid, progress=97)
+
+            if not guest.start_by_uuid(conn=conn):
+                raise
+
+            response_emit.success(_object=msg['_object'], action=msg['action'], uuid=msg['uuid'],
+                                  data=extend_data, passback_parameters=msg.get('passback_parameters'))
+
+        except:
+            logger.error(traceback.format_exc())
+            log_emit.error(traceback.format_exc())
+            response_emit.failure(_object=msg['_object'], action=msg.get('action'), uuid=msg.get('uuid'),
+                                  passback_parameters=msg.get('passback_parameters'))
+
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_operate_engine(self):
 
@@ -195,60 +258,8 @@ class Host(object):
                             raise
 
                     if msg['action'] == 'create':
-
-                        Guest.storage_mode = msg['storage_mode']
-
-                        self.guest = Guest(uuid=msg['uuid'], name=msg['name'], template_path=msg['template_path'],
-                                           disk=msg['disk'], xml=msg['xml'])
-
-                        if Guest.storage_mode == StorageMode.glusterfs.value:
-                            if Guest.gf is None:
-                                Guest.dfs_volume = msg['dfs_volume']
-                                Guest.init_gfapi()
-
-                        self.guest.system_image_path = self.guest.disk['path']
-
-                        # 虚拟机基础环境路径创建后，至虚拟机定义成功前，认为该环境是脏的
-                        self.dirty_scene = True
-
-                        q_creating_guest.put({
-                            'storage_mode': Guest.storage_mode,
-                            'dfs_volume': Guest.dfs_volume,
-                            'uuid': self.guest.uuid,
-                            'template_path': self.guest.template_path,
-                            'system_image_path': self.guest.system_image_path
-                        })
-
-                        if not self.guest.generate_system_image():
-                            raise
-
-                        if not self.guest.define_by_xml(conn=self.conn):
-                            raise
-
-                        guest_event_emit.creating(uuid=self.guest.uuid, progress=92)
-
-                        # 虚拟机定义成功后，该环境由脏变为干净，重置该变量为 False，避免下个周期被清理现场
-                        self.dirty_scene = False
-
-                        disk_info = dict()
-
-                        if Guest.storage_mode == StorageMode.glusterfs.value:
-                            disk_info = Disk.disk_info_by_glusterfs(dfs_volume=self.guest.dfs_volume,
-                                                                    image_path=self.guest.system_image_path)
-
-                        elif Guest.storage_mode in [StorageMode.local.value, StorageMode.shared_mount.value]:
-                            disk_info = Disk.disk_info_by_local(image_path=self.guest.system_image_path)
-
-                        # 由该线程最顶层的异常捕获机制，处理其抛出的异常
-                        self.guest.execute_boot_jobs(guest=self.conn.lookupByUUIDString(uuidstr=self.guest.uuid),
-                                                     boot_jobs=msg['boot_jobs'])
-
-                        extend_data.update({'disk_info': disk_info})
-
-                        guest_event_emit.creating(uuid=self.guest.uuid, progress=97)
-                        if not self.guest.start_by_uuid(conn=self.conn):
-                            # 不清理现场，如需清理，让用户手动通过面板删除
-                            continue
+                        thread.start_new_thread(self.create_guest, (self.conn, msg))
+                        continue
 
                     elif msg['action'] == 'reboot':
                         if self.guest.reboot() != 0:
@@ -537,10 +548,11 @@ class Host(object):
                     if guest['storage_mode'] in [StorageMode.ceph.value, StorageMode.glusterfs.value]:
                         if guest['storage_mode'] == StorageMode.glusterfs.value:
                             if template_path not in template_size:
-                                # 创建 Guest，到此处，Guest.gf 必定已经被初始化过了，参见创建 Guest 的代码
-                                # if Guest.gf is None:
-                                #     Guest.dfs_volume = msg['dfs_volume']
-                                #     Guest.init_gfapi()
+
+                                if Guest.gf is None:
+                                    Guest.dfs_volume = guest['dfs_volume']
+                                    Guest.init_gfapi()
+
                                 template_size[template_path] = float(Guest.gf.getsize(template_path))
 
                             system_image_size = Guest.gf.getsize(guest['system_image_path'])
