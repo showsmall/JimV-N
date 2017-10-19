@@ -19,14 +19,24 @@ git clone https://github.com/jamesiter/JimV-N.git
 ```
 
 ### 安装所需库
+`Gentoo`
 ``` bash
 # 创建 python 虚拟环境
 virtualenv --system-site-packages ~/venv
 # 导入 python 虚拟环境
 source ~/venv/bin/activate
 # 安装 JimV-N 所需扩展库
-pip install -r /opt/JimV-N/requirements.txt
+pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
+pip install -r /opt/JimV-N/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 emerge libguestfs
+```
+
+`CentOS`
+``` bash
+yum install libvirt libvirt-devel python-devel libguestfs -y
+yum install libguestfs libguestfs-{devel,tools,xfs,winsupport,rescue} python-libguestfs -y
+pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
+pip install -r /opt/JimV-N/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
 
 

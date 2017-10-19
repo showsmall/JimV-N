@@ -106,7 +106,7 @@ class Host(object):
                 load_avg = os.getloadavg()[1]
                 # sleep 加 1，避免 load_avg 为 0 时，循环过度
                 time.sleep(load_avg * 10 + 1)
-                if config['debug']:
+                if config['DEBUG']:
                     print 'downstream_queue_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
                 msg = r.lpop(config['downstream_queue'])
@@ -146,7 +146,7 @@ class Host(object):
             try:
                 msg = ps.get_message(timeout=1)
 
-                if config['debug']:
+                if config['DEBUG']:
                     print 'guest_operate_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
                 if msg is None or 'data' not in msg or not isinstance(msg['data'], basestring):
@@ -184,7 +184,7 @@ class Host(object):
 
                         if msg['uuid'] not in self.guest_mapping_by_uuid:
 
-                            if config['debug']:
+                            if config['DEBUG']:
                                 _log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
                                 logger.debug(_log)
                                 log_emit.debug(_log)
@@ -401,7 +401,7 @@ class Host(object):
 
                             if msg['guest_uuid'] not in self.guest_mapping_by_uuid:
 
-                                if config['debug']:
+                                if config['DEBUG']:
                                     _log = u' '.join([u'uuid', msg['uuid'], u'在宿主机', self.hostname, u'中未找到.'])
                                     logger.debug(_log)
                                     log_emit.debug(_log)
@@ -557,7 +557,7 @@ class Host(object):
 
             # noinspection PyBroadException
             try:
-                if config['debug']:
+                if config['DEBUG']:
                     print 'state_report_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
                 time.sleep(2)
@@ -743,7 +743,7 @@ class Host(object):
                 print 'Thread collection_performance_process_engine say bye-bye'
                 return
 
-            if config['debug']:
+            if config['DEBUG']:
                 print 'collection_performance_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
             thread_status['collection_performance_process_engine'] = ji.JITime.now_date_time()
@@ -870,7 +870,7 @@ class Host(object):
                 print 'Thread host_collection_performance_process_engine say bye-bye'
                 return
 
-            if config['debug']:
+            if config['DEBUG']:
                 print 'host_collection_performance_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
             thread_status['host_collection_performance_process_engine'] = ji.JITime.now_date_time()

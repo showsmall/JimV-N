@@ -12,6 +12,7 @@ import getopt
 import redis
 import jimit as ji
 import Queue
+import errno
 
 from jimvn_exception import PathNotExist
 from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit
@@ -27,7 +28,12 @@ __copyright__ = '(c) 2017 by James Iter.'
 class Init(object):
 
     config = {
-        'config_file': '/etc/jimvn.conf'
+        'config_file': '/etc/jimvc.conf',
+        'log_cycle': 'D',
+        'instruction_channel': 'C:Instruction',
+        'downstream_queue': 'Q:Downstream',
+        'upstream_queue': 'Q:Upstream',
+        'DEBUG': False
     }
 
     @classmethod
@@ -64,23 +70,32 @@ class Init(object):
 
     @classmethod
     def init_logger(cls):
-        cls.config['log_file_base'] = '/'.join([sys.path[0], cls.config['log_file_dir'], 'log'])
-        log_dir = os.path.dirname(cls.config['log_file_base'])
+        log_dir = os.path.dirname(cls.config['log_file_path'])
         if not os.path.isdir(log_dir):
-            os.makedirs(log_dir, 0755)
+            try:
+                os.makedirs(log_dir, 0755)
+            except OSError as e:
+                # 如果配置文件中的日志目录无写入权限，则调整日志路径到本项目目录下
+                if e.errno != errno.EACCES:
+                    raise
 
-        process_title = 'JimV-N'
-        log_file_path = '.'.join([cls.config['log_file_base'], process_title])
-        _logger = logging.getLogger(log_file_path)
+                cls.config['log_file_path'] = './logs/jimvc.log'
+                log_dir = os.path.dirname(cls.config['log_file_path'])
 
-        if cls.config['debug']:
-            cls.config['DEBUG'] = True
+                if not os.path.isdir(log_dir):
+                    os.makedirs(log_dir, 0755)
+
+                print u'日志路径自动调整为 ' + cls.config['log_file_path']
+
+        _logger = logging.getLogger(cls.config['log_file_path'])
+
+        if cls.config['DEBUG']:
             _logger.setLevel(logging.DEBUG)
         else:
-            cls.config['DEBUG'] = False
             _logger.setLevel(logging.INFO)
 
-        fh = TimedRotatingFileHandler(log_file_path, when=cls.config['log_cycle'], interval=1, backupCount=7)
+        fh = TimedRotatingFileHandler(cls.config['log_file_path'], when=cls.config['log_cycle'],
+                                      interval=1, backupCount=7)
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(lineno)s - %(message)s')
         fh.setFormatter(formatter)
@@ -96,9 +111,10 @@ class Init(object):
             _r.ping()
         except redis.exceptions.ResponseError as e:
             logger.warn(e.message)
-            _r = redis.StrictRedis(host=cls.config.get('redis_host', '127.0.0.1'), port=cls.config.get('redis_port', 6379),
-                                   db=cls.config.get('redis_dbid', 0), password=cls.config.get('redis_password', ''),
-                                   decode_responses=True)
+            _r = redis.StrictRedis(
+                host=cls.config.get('redis_host', '127.0.0.1'), port=cls.config.get('redis_port', 6379),
+                db=cls.config.get('redis_dbid', 0), password=cls.config.get('redis_password', ''),
+                decode_responses=True)
 
         _r.client_setname(ji.Common.get_hostname())
         return _r
