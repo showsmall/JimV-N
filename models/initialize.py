@@ -28,7 +28,7 @@ __copyright__ = '(c) 2017 by James Iter.'
 class Init(object):
 
     config = {
-        'config_file': '/etc/jimvc.conf',
+        'config_file': '/etc/jimvn.conf',
         'log_cycle': 'D',
         'instruction_channel': 'C:Instruction',
         'downstream_queue': 'Q:Downstream',
