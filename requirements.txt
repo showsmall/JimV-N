@@ -3,5 +3,6 @@ jimit
 redis
 libvirt-python
 gfapi
+psutil
 # http://libguestfs.org/download/python/guestfs-1.36.2.tar.gz
 paramiko
