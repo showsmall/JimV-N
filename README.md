@@ -7,13 +7,13 @@
 - [项目描述](#项目描述)
 - [未来计划](#未来计划)
 - [部署](#部署)
+    - [克隆 JimV-N 项目](#克隆-jimv-n-项目)
     - [基础设施建设](#基础设施建设)
     - [服务器间实现SSH-KEY互通(为热迁移做铺垫)](#服务器间实现ssh-key互通为热迁移做铺垫)
     - [为虚拟化配置`绑定+桥接`的网络环境](#为虚拟化配置绑定桥接的网络环境)
     - [Libvirtd 中定义新网桥](#libvirtd-中定义新网桥)
     - [启动虚拟化网络](#启动虚拟化网络)
     - [启动服务](#启动服务)
-    - [克隆 JimV-N 项目](#克隆-jimv-n-项目)
     - [修改配置文件](#修改配置文件)
     - [启动服务](#启动服务)
 - [问题反馈](#问题反馈)
@@ -33,11 +33,18 @@
 
 ## 部署
 
+### 克隆 JimV-N 项目
+
+``` bash
+git clone https://github.com/jamesiter/JimV-N.git /opt/JimV-N
+```
+
 ### 基础设施建设
 
 `Gentoo`
 
 ``` bash
+HOSTNAME='kvm02.jimvn.jimv'; echo hostname=\""$HOSTNAME"\" > /etc/conf.d/hostname; hostname $HOSTNAME; unset HOSTNAME
 # 安装 Qemu
 USE="aio caps curl fdt filecaps jpeg ncurses nls pin-upstream-blobs png seccomp threads uuid vhost-net vnc xattr iscsi nfs spice ssh virtfs xfs" emerge app-emulation/qemu
 
@@ -54,6 +61,7 @@ emerge screen
 `CentOS`
 
 ``` bash
+HOSTNAME='kvm02.jimvn.jimv'; echo $HOSTNAME > /etc/hostname; hostname $HOSTNAME; unset HOSTNAME
 yum install libvirt libvirt-devel python-devel libguestfs -y
 yum install libguestfs libguestfs-{devel,tools,xfs,winsupport,rescue} python-libguestfs -y
 yum install screen -y
@@ -221,19 +229,13 @@ systemctl enable libvirtd
 systemctl start libvirtd
 ```
 
-### 克隆 JimV-N 项目
-
-``` bash
-git clone https://github.com/jamesiter/JimV-N.git /opt/JimV-N
-```
-
 ### 修改配置文件
 
 配置文件的默认读取路径：`/etc/jimvn.conf`
 ``` bash
 cp /opt/JimV-N/jimvn.conf /etc/jimvn.conf
 ```
-<br> **提示：**
+**提示：**
 > 下表中凸显的配置项，需要用户根据自己的环境手动修改。
 
 | 配置项                | 默认值                   | 说明               |
