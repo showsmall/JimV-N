@@ -547,6 +547,7 @@ class Host(object):
         # 首次启动时，做数据初始化
         self.update_interfaces()
         self.update_disks()
+        boot_time = ji.Common.ts()
 
         while True:
             if Utils.exit_flag:
@@ -569,7 +570,7 @@ class Host(object):
 
                 host_event_emit.heartbeat(message={'node_id': self.node_id, 'cpu': self.cpu, 'memory': self.memory,
                                                    'interfaces': self.interfaces, 'disks': self.disks,
-                                                   'system_load': os.getloadavg(),
+                                                   'system_load': os.getloadavg(), 'boot_time': boot_time,
                                                    'memory_available': psutil.virtual_memory().available})
 
             except:

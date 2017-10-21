@@ -64,7 +64,7 @@ emerge screen
 HOSTNAME='kvm02.jimvn.jimv'; echo $HOSTNAME > /etc/hostname; hostname $HOSTNAME; unset HOSTNAME
 yum install libvirt libvirt-devel python-devel libguestfs -y
 yum install libguestfs libguestfs-{devel,tools,xfs,winsupport,rescue} python-libguestfs -y
-yum install screen -y
+yum install screen python2-pip -y
 pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
 pip install -r /opt/JimV-N/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
