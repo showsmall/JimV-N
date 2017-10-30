@@ -83,3 +83,11 @@ class HostCollectionPerformanceDataKind(IntEnum):
     traffic = 1
     disk_usage_io = 2
 
+
+class OSType(IntEnum):
+    linux = 0
+    windows = 1
+    bsd = 2
+    aix = 3
+    hp_unix = 4
+    unknown = 255

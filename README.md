@@ -50,12 +50,13 @@ USE="aio caps curl fdt filecaps jpeg ncurses nls pin-upstream-blobs png seccomp 
 
 # 安装 Libvirtd
 USE="caps libvirtd macvtap nls qemu udev vepa iscsi nfs virt-network" emerge app-emulation/libvirt
+
+ACCEPT_KEYWORDS=~amd64 USE="python" emerge libguestfs
+emerge screen
  
 # 安装 JimV-N 所需扩展库
 pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
 pip install -r /opt/JimV-N/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-emerge libguestfs
-emerge screen
 ```
 
 `CentOS`

@@ -13,7 +13,7 @@ from gluster import gfapi
 import xml.etree.ElementTree as ET
 
 from initialize import logger, log_emit, guest_event_emit, q_creating_guest, response_emit
-from models.status import OperateRuleKind, StorageMode
+from models.status import OperateRuleKind, StorageMode, OSType
 from disk import Disk
 
 
@@ -100,7 +100,7 @@ class Guest(object):
 
         return True
 
-    def execute_boot_jobs(self, guest=None, boot_jobs=None):
+    def execute_boot_jobs(self, guest=None, boot_jobs=None, os_type=None):
         if not isinstance(boot_jobs, list):
             raise
 
@@ -129,6 +129,10 @@ class Guest(object):
 
         for boot_job in boot_jobs:
             if boot_job['kind'] == OperateRuleKind.cmd.value:
+
+                if os_type == OSType.windows.value:
+                    continue
+
                 self.g.sh(boot_job['command'])
 
             elif boot_job['kind'] == OperateRuleKind.write_file.value:
@@ -282,7 +286,7 @@ class Guest(object):
 
             # 由该线程最顶层的异常捕获机制，处理其抛出的异常
             guest.execute_boot_jobs(guest=conn.lookupByUUIDString(uuidstr=guest.uuid),
-                                    boot_jobs=msg['boot_jobs'])
+                                    boot_jobs=msg['boot_jobs'], os_type=msg['os_type'])
 
             extend_data = dict()
             extend_data.update({'disk_info': disk_info})
