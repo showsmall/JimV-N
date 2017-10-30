@@ -136,10 +136,20 @@ class Guest(object):
                 self.g.sh(boot_job['command'])
 
             elif boot_job['kind'] == OperateRuleKind.write_file.value:
-                self.g.write(boot_job['path'], boot_job['content'])
+
+                content = boot_job['content']
+                if os_type == OSType.windows.value:
+                    content.replace(r'\n', '\r\n')
+
+                self.g.write(boot_job['path'], content)
 
             elif boot_job['kind'] == OperateRuleKind.append_file.value:
-                self.g.write_append(boot_job['path'], boot_job['content'])
+
+                content = boot_job['content']
+                if os_type == OSType.windows.value:
+                    content.replace(r'\n', '\r\n')
+
+                self.g.write_append(boot_job['path'], content)
 
             else:
                 continue
