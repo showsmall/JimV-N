@@ -139,7 +139,7 @@ class Guest(object):
 
                 content = boot_job['content']
                 if os_type == OSType.windows.value:
-                    content.replace(r'\n', '\r\n')
+                    content = content.replace(r'\n', '\r\n')
 
                 self.g.write(boot_job['path'], content)
 
@@ -147,7 +147,7 @@ class Guest(object):
 
                 content = boot_job['content']
                 if os_type == OSType.windows.value:
-                    content.replace(r'\n', '\r\n')
+                    content = content.replace(r'\n', '\r\n')
 
                 self.g.write_append(boot_job['path'], content)
 
