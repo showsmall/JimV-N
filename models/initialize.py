@@ -104,8 +104,23 @@ class Init(object):
 
     @classmethod
     def redis_init_conn(cls):
+        """
+          * Added TCP Keep-alive support by passing use the socket_keepalive=True
+            option. Finer grain control can be achieved using the
+            socket_keepalive_options option which expects a dictionary with any of
+            the keys (socket.TCP_KEEPIDLE, socket.TCP_KEEPCNT, socket.TCP_KEEPINTVL)
+            and integers for values. Thanks Yossi Gottlieb.
+            TCP_KEEPDILE 设置连接上如果没有数据发送的话，多久后发送keepalive探测分组，单位是秒
+            TCP_KEEPINTVL 前后两次探测之间的时间间隔，单位是秒
+            TCP_KEEPCNT 关闭一个非活跃连接之前的最大重试次数
+        """
+        import socket
         _r = redis.StrictRedis(host=cls.config.get('redis_host', '127.0.0.1'), port=cls.config.get('redis_port', 6379),
-                               db=cls.config.get('redis_dbid', 0), decode_responses=True)
+                               db=cls.config.get('redis_dbid', 0), decode_responses=True, socket_timeout=5,
+                               socket_connect_timeout=5, socket_keepalive=True,
+                               socket_keepalive_options={socket.TCP_KEEPIDLE: 2, socket.TCP_KEEPINTVL: 5,
+                                                         socket.TCP_KEEPCNT: 10},
+                               retry_on_timeout=True)
 
         try:
             _r.ping()
@@ -114,7 +129,10 @@ class Init(object):
             _r = redis.StrictRedis(
                 host=cls.config.get('redis_host', '127.0.0.1'), port=cls.config.get('redis_port', 6379),
                 db=cls.config.get('redis_dbid', 0), password=cls.config.get('redis_password', ''),
-                decode_responses=True)
+                decode_responses=True, socket_timeout=5, socket_connect_timeout=5, socket_keepalive=True,
+                socket_keepalive_options={socket.TCP_KEEPIDLE: 2, socket.TCP_KEEPINTVL: 5,
+                                          socket.TCP_KEEPCNT: 10},
+                retry_on_timeout=True)
 
         _r.client_setname(ji.Common.get_hostname())
         return _r
