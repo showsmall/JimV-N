@@ -105,7 +105,8 @@ class Host(object):
                 # 取系统最近 5 分钟的平均负载值
                 load_avg = os.getloadavg()[1]
                 # sleep 加 1，避免 load_avg 为 0 时，循环过度
-                time.sleep(load_avg * 10 + 1)
+                # time.sleep(load_avg * 10 + 1)
+                time.sleep(0.1)
                 if config['DEBUG']:
                     print 'downstream_queue_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
