@@ -73,8 +73,12 @@ class Host(object):
     def refresh_guest_mapping(self):
         # 调用该方法的函数，都为单独的对象实例。即不存在多线程共用该方法，故而不用加多线程锁
         self.guest_mapping_by_uuid.clear()
-        for guest in self.conn.listAllDomains():
-            self.guest_mapping_by_uuid[guest.UUIDString()] = guest
+        try:
+            for guest in self.conn.listAllDomains():
+                self.guest_mapping_by_uuid[guest.UUIDString()] = guest
+        except libvirt.libvirtError as e:
+            # 尝试重连 Libvirtd
+            self.init_conn()
 
     def clear_scene(self):
 
