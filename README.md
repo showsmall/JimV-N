@@ -219,6 +219,7 @@ rc-update add net.br0 default
 rc-update del dnsmasq
 rc-update add libvirtd
 /etc/init.d/libvirtd start
+virsh net-destroy default; virsh net-undefine default
 ```
 
 `CentOS`
@@ -228,6 +229,7 @@ systemctl stop dnsmasq
 systemctl disable dnsmasq
 systemctl enable libvirtd
 systemctl start libvirtd
+virsh net-destroy default; virsh net-undefine default
 ```
 
 ### 修改配置文件

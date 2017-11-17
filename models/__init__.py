@@ -33,6 +33,10 @@ from utils import (
     Utils, Emit
 )
 
+from pidfile import (
+    PidFile
+)
+
 
 __author__ = 'James Iter'
 __date__ = '17/3/12'
@@ -42,6 +46,6 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 __all__ = [
     'Init', 'Guest', 'Disk', 'Host', 'Utils', 'Emit', 'EmitKind', 'GuestState', 'HostEvent', 'LogLevel', 'OSType',
-    'ResponseState', 'CollectionPerformanceDataKind', 'HostCollectionPerformanceDataKind'
+    'ResponseState', 'CollectionPerformanceDataKind', 'HostCollectionPerformanceDataKind', 'PidFile'
 ]
 

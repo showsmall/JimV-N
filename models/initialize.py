@@ -13,8 +13,10 @@ import redis
 import jimit as ji
 import Queue
 import errno
+import atexit
 
 from jimvn_exception import PathNotExist
+from models import PidFile
 from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit
 from utils import CollectionPerformanceEmit, HostCollectionPerformanceEmit
 
@@ -33,7 +35,9 @@ class Init(object):
         'instruction_channel': 'C:Instruction',
         'downstream_queue': 'Q:Downstream',
         'upstream_queue': 'Q:Upstream',
-        'DEBUG': False
+        'DEBUG': False,
+        'daemon': True,
+        'pidfile': '/run/jimv/jimvn.pid'
     }
 
     @classmethod
@@ -140,6 +144,10 @@ class Init(object):
 
 config = Init.load_config()
 logger = Init.init_logger()
+pidfile = PidFile(file_name=config['pidfile'])
+pidfile.create(pid=os.getpid())
+atexit.register(pidfile.unlink)
+
 r = Init.redis_init_conn()
 assert isinstance(r, redis.StrictRedis)
 q_creating_guest = Queue.Queue()
