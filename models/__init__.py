@@ -13,6 +13,10 @@ from status import (
     OSType
 )
 
+from pidfile import (
+    PidFile
+)
+
 from initialize import (
     Init
 )
@@ -31,10 +35,6 @@ from host import (
 
 from utils import (
     Utils, Emit
-)
-
-from pidfile import (
-    PidFile
 )
 
 

@@ -33,14 +33,11 @@ class PidFile(object):
 
         # Write pidfile
         pid_file_dir = os.path.dirname(self.file_name)
-        if pid_file_dir and not os.path.isdir(pid_file_dir):
-            raise RuntimeError("%s doesn't exist. Can't create pidfile." % pid_file_dir)
-
-        if not os.path.isdir(pid_file_dir):
+        if not os.path.exists(pid_file_dir):
             os.makedirs(pid_file_dir, 0755)
 
-        with open(file=self.file_name, mode='w') as f:
-            f.write(pid)
+        with open(self.file_name, 'w') as f:
+            f.write(self.pid.__str__())
 
         # set permissions to -rw-r--r--
         os.chmod(self.file_name, 420)
