@@ -13,10 +13,8 @@ import redis
 import jimit as ji
 import Queue
 import errno
-import atexit
 
 from jimvn_exception import PathNotExist
-from models import PidFile
 from utils import LogEmit, GuestEventEmit, ResponseEmit, HostEventEmit
 from utils import CollectionPerformanceEmit, HostCollectionPerformanceEmit
 
@@ -144,9 +142,6 @@ class Init(object):
 
 config = Init.load_config()
 logger = Init.init_logger()
-pidfile = PidFile(file_name=config['pidfile'])
-pidfile.create(pid=os.getpid())
-atexit.register(pidfile.unlink)
 
 r = Init.redis_init_conn()
 assert isinstance(r, redis.StrictRedis)

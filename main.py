@@ -6,6 +6,8 @@ import threading
 import traceback
 import signal
 import daemon
+import atexit
+import os
 
 import time
 
@@ -13,6 +15,7 @@ from models.event_process import EventProcess
 from models.initialize import logger, thread_status, config
 from models import Host
 from models import Utils
+from models import PidFile
 
 
 __author__ = 'James Iter'
@@ -22,6 +25,9 @@ __copyright__ = '(c) 2017 by James Iter.'
 
 
 def main():
+    pidfile = PidFile(file_name=config['pidfile'])
+    pidfile.create(pid=os.getpid())
+    atexit.register(pidfile.unlink)
 
     threads = []
 
