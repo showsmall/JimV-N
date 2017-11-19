@@ -16,7 +16,7 @@ export GLOBAL_CONFIG_KEY='global_config'
 export VM_NETWORK_KEY='vm_network'
 export VM_NETWORK_MANAGE_KEY='vm_manage_network'
 
-ARGS=`getopt -o h --long redis_host:,redis_password:,help -n 'INSTALL.sh' -- "$@"`
+ARGS=`getopt -o h --long redis_host:,redis_password:,redis_port:,help -n 'INSTALL.sh' -- "$@"`
 
 eval set -- "${ARGS}"
 
@@ -27,12 +27,16 @@ do
             export REDIS_HOST=$2
             shift 2
             ;;
+        --redis_port)
+            export REDIS_PORT=$2
+            shift 2
+            ;;
         --redis_password)
             export REDIS_PSWD=$2
             shift 2
             ;;
         -h|--help)
-            echo 'INSTALL.sh [-h|--help] {--redis_host,--redis_password}'
+            echo 'INSTALL.sh [-h|--help] {--redis_host,--redis_password,--redis_port}'
             exit 0
             ;;
         --)
@@ -61,42 +65,59 @@ function check_precondition() {
         ;;
     esac
 
+    yum install epel-release -y
+    yum install redis -y
+
     if [ `egrep -c '(vmx|svm)' /proc/cpuinfo` -eq 0 ]; then
-        echo "We need CPU support the feature vmx or svm, this haven't."
+        echo "需要 CPU 支持 vmx 或 svm, 该 CPU 不支持。"
         exit 1
     fi
 
-    if [ ! ${REDIS_HOST} ] || [ ${REDIS_HOST} -eq 0 ]; then
-        echo "You be need to specified argument '--redis_host'"
+    if [ ! ${REDIS_HOST} ] || [ ${#REDIS_HOST} -eq 0 ]; then
+        echo "你需要指定参数 '--redis_host'"
         exit 1
+    fi
+
+    if [ ! ${REDIS_PORT} ]; then
+        export REDIS_PORT='6379'
     fi
 
     if [ ! ${REDIS_PSWD} ]; then
         export REDIS_PSWD=''
     fi
 
-    if [ `redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} --raw EXISTS ${GLOBAL_CONFIG_KEY}` -eq 0 ]; then
-        echo "You need to initialize JimV-C before."
+    REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw ping`
+
+    if [ ${REDIS_RESPONSE} != 'x_PONG' ]; then
+        echo "Redis 连接失败，请检查参数 --redis_host, --redis_password, --redis_port 是否正确。"
         exit 1
     fi
 
-    if [ `redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} --raw HEXISTS ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_KEY}` -eq 0 ]; then
-        echo "You need to initialize JimV-C before, we not found key ${VM_NETWORK_KEY}."
+    REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw EXISTS ${GLOBAL_CONFIG_KEY}`
+    if [ ${REDIS_RESPONSE} = 'x_0' ]; then
+        echo "安装 JimV-N 之前，你需要先初始化 JimV-C。"
         exit 1
-    else
-        export VM_NETWORK=`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} --raw HGET ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_KEY}`
     fi
 
-    if [ `redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} --raw HEXISTS ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_MANAGE_KEY}` -eq 0 ]; then
-        echo "You need to initialize JimV-C before, we not found key ${VM_NETWORK_MANAGE_KEY}."
+    REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HEXISTS ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_KEY}`
+    if [ ${REDIS_RESPONSE} = 'x_0' ]; then
+        echo "未在 JimV-C 的配置中发现 key ${VM_NETWORK_KEY}，请重新配置 JimV-C。"
         exit 1
     else
-        export VM_NETWORK_MANAGE=`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} --raw HGET ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_MANAGE_KEY}`
+        export VM_NETWORK=`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HGET ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_KEY}`
+    fi
+
+    REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HEXISTS ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_MANAGE_KEY}`
+    if [ ${REDIS_RESPONSE} = 'x_0' ]; then
+        echo "未在 JimV-C 的配置中发现 key ${VM_NETWORK_MANAGE_KEY}，请重新配置 JimV-C。"
+        exit 1
+    else
+        export VM_NETWORK_MANAGE=`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HGET ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_MANAGE_KEY}`
     fi
 }
 
 function prepare() {
-    yum install epel-release python2-pip git redis net-tools -y
+    yum install python2-pip git net-tools -y
     pip install --upgrade pip -i ${PYPI}
 
 }
@@ -122,7 +143,7 @@ function handle_net_bonding_bridge() {
     export NIC=`ifconfig | grep ${SERVER_IP} -B 1 | head -1 | cut -d ':' -f 1`
 
     # 参考地址: https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/7/html/networking_guide/
-cat > /etc/sysconfig/network-scripts/ifcfg-${VM_NETWORK} << "EOF"
+cat > /etc/sysconfig/network-scripts/ifcfg-${VM_NETWORK} << EOF
 DEVICE=${VM_NETWORK}
 NAME=${VM_NETWORK}
 TYPE=Bridge
@@ -137,7 +158,7 @@ DNS2=8.8.8.8
 IPV6INIT=no
 EOF
 
-cat > /etc/sysconfig/network-scripts/ifcfg-bond0 << "EOF"
+cat > /etc/sysconfig/network-scripts/ifcfg-bond0 << EOF
 DEVICE=bond0
 NAME=bond0
 TYPE=Bond
@@ -148,7 +169,7 @@ BOOTPROTO=none
 BONDING_OPTS="mode=balance-alb xmit_hash_policy=layer3+4"
 EOF
 
-cat > /etc/sysconfig/network-scripts/ifcfg-${NIC} << "EOF"
+cat > /etc/sysconfig/network-scripts/ifcfg-${NIC} << EOF
 DEVICE=${NIC}
 NAME=${NIC}
 TYPE=Ethernet
@@ -190,8 +211,12 @@ function start_libvirtd() {
     virsh net-destroy default; virsh net-undefine default
 }
 
-function clone_and_checkout_JimV-N() {
-    git clone https://github.com/jamesiter/JimV-N.git /opt/JimV-C
+function clone_and_checkout_JimVN() {
+    git clone https://github.com/jamesiter/JimV-N.git /opt/JimV-N
+    if [ ! $? -eq 0 ]; then
+        echo '克隆 JimV-N 失败，请检查网络可用性。'
+        exit 1
+    fi
 }
 
 function install_dependencies_library() {
@@ -203,6 +228,7 @@ function generate_config_file() {
     cp -v /opt/JimV-N/jimvn.conf /etc/jimvn.conf
     sed -i "s/\"redis_host\".*$/\"redis_host\": \"${REDIS_HOST}\",/" /etc/jimvn.conf
     sed -i "s/\"redis_password\".*$/\"redis_password\": \"${REDIS_PSWD}\",/" /etc/jimvn.conf
+    sed -i "s/\"redis_port\".*$/\"redis_port\": \"${REDIS_PORT}\",/" /etc/jimvn.conf
 }
 
 function display_summary_information() {
@@ -221,7 +247,7 @@ function deploy() {
     handle_net_bonding_bridge
     create_network_bridge_in_libvirt
     start_libvirtd
-    clone_and_checkout_JimV-N
+    clone_and_checkout_JimVN
     install_dependencies_library
     generate_config_file
     display_summary_information
