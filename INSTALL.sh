@@ -55,12 +55,12 @@ function check_precondition() {
     case ${ID} in
     centos|fedora|rhel)
         if [ ${VERSION_ID} -lt 7 ]; then
-            echo "System version must greater than or equal to 7, We found ${VERSION_ID}."
+            echo "系统版本号必须大于等于 7，检测到当前的系统版本号为 ${VERSION_ID}."
 	        exit 1
         fi
         ;;
     *)
-        echo "${ID} is unknown, Please to be installed manually."
+        echo "系统发行版 ${ID} 未被支持，请手动完成安装。"
 	    exit 1
         ;;
     esac
@@ -233,10 +233,10 @@ function generate_config_file() {
 
 function display_summary_information() {
     echo
-    echo "=== Summary information"
-    echo "======================="
+    echo "=== 信息汇总"
+    echo "==========="
     echo
-    echo "Now, you can run JimV-N use command '/opt/JimV-N/startup.sh'."
+    echo "现在可以通过命令 '/opt/JimV-N/startup.sh' 启动运行 JimV-C。"
 }
 
 function deploy() {

@@ -36,12 +36,6 @@ def main():
     signal.signal(signal.SIGTERM, Utils.signal_handle)
     signal.signal(signal.SIGINT, Utils.signal_handle)
 
-    host_use_for_downstream_queue_process_engine = Host()
-    host_use_for_downstream_queue_process_engine.init_conn()
-    t_ = threading.Thread(target=host_use_for_downstream_queue_process_engine.downstream_queue_process_engine,
-                          args=())
-    threads.append(t_)
-
     guest_creating_progress_report_engine_engine = Host()
     guest_creating_progress_report_engine_engine.init_conn()
     t_ = threading.Thread(

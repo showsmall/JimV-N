@@ -93,47 +93,6 @@ class Host(object):
                 logger.warn(msg=log)
                 log_emit.warn(msg=log)
 
-    def downstream_queue_process_engine(self):
-        while True:
-            if Utils.exit_flag:
-                print 'Thread downstream_queue_process_engine say bye-bye'
-                return
-
-            thread_status['downstream_queue_process_engine'] = ji.JITime.now_date_time()
-            msg = dict()
-
-            # noinspection PyBroadException
-            try:
-                # 清理上个周期弄脏的现场
-                # self.clear_scene()
-                # 取系统最近 5 分钟的平均负载值
-                load_avg = os.getloadavg()[1]
-                # sleep 加 1，避免 load_avg 为 0 时，循环过度
-                # time.sleep(load_avg * 10 + 1)
-                time.sleep(0.1)
-                if config['DEBUG']:
-                    print 'downstream_queue_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
-
-                msg = r.lpop(config['downstream_queue'])
-                if msg is None:
-                    continue
-
-                try:
-                    msg = json.loads(msg)
-                except ValueError as e:
-                    logger.error(e.message)
-                    log_emit.error(e.message)
-                    continue
-
-                else:
-                    pass
-
-            except:
-                logger.error(traceback.format_exc())
-                log_emit.error(traceback.format_exc())
-                response_emit.failure(action=msg.get('action'), uuid=msg.get('uuid'),
-                                      passback_parameters=msg.get('passback_parameters'))
-
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_operate_engine(self):
 
