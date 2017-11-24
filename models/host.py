@@ -7,6 +7,7 @@ import sys
 import time
 import traceback
 import Queue
+import redis
 
 import libvirt
 import json
@@ -412,6 +413,11 @@ class Host(object):
 
                 response_emit.success(_object=msg['_object'], action=msg['action'], uuid=msg['uuid'],
                                       data=extend_data, passback_parameters=msg.get('passback_parameters'))
+
+            except redis.exceptions.ConnectionError as e:
+                logger.error(traceback.format_exc())
+                # 防止循环线程，在redis连接断开时，混水写入日志
+                time.sleep(5)
 
             except:
                 logger.error(traceback.format_exc())

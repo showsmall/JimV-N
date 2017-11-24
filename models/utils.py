@@ -3,8 +3,13 @@
 
 
 import commands
+import traceback
+
 import jimit as ji
 import json
+
+import redis
+import time
 
 from models import LogLevel, EmitKind, GuestState, ResponseState, HostEvent
 from models import CollectionPerformanceDataKind, HostCollectionPerformanceDataKind
@@ -53,7 +58,13 @@ class Emit(object):
 
         msg = json.dumps({'kind': _kind, 'type': _type, 'timestamp': ji.Common.ts(), 'host': self.hostname,
                           'message': message}, ensure_ascii=False)
-        return self.r.rpush(self.upstream_queue, msg)
+        try:
+            return self.r.rpush(self.upstream_queue, msg)
+
+        except redis.exceptions.ConnectionError as e:
+            logger.error(traceback.format_exc())
+            # 防止循环线程，在redis连接断开时，混水写入日志
+            time.sleep(5)
 
 
 class LogEmit(Emit):
