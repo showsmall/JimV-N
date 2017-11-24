@@ -9,5 +9,5 @@
 #  Start up the JimV-N.
 #
 
-/opt/JimV-N/main.py
+python main.py
 

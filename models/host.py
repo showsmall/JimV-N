@@ -95,6 +95,7 @@ class Host(object):
 
     # 使用时，创建独立的实例来避开 多线程 的问题
     def guest_operate_engine(self):
+        self.init_conn()
 
         ps = r.pubsub(ignore_subscribe_messages=False)
         ps.subscribe(config['instruction_channel'])
@@ -423,6 +424,7 @@ class Host(object):
         """
         Guest 创建进度上报引擎
         """
+
         list_creating_guest = list()
         template_size = dict()
 
@@ -507,6 +509,7 @@ class Host(object):
         """
         宿主机状态上报引擎
         """
+        self.init_conn()
 
         # 首次启动时，做数据初始化
         self.update_interfaces()
@@ -542,6 +545,7 @@ class Host(object):
                 log_emit.error(traceback.format_exc())
 
     def refresh_guest_state(self):
+        self.init_conn()
         self.refresh_guest_mapping()
 
         for guest in self.guest_mapping_by_uuid.values():
@@ -702,6 +706,7 @@ class Host(object):
             collection_performance_emit.disk_io(data=data)
 
     def collection_performance_process_engine(self):
+        self.init_conn()
 
         while True:
             if Utils.exit_flag:
@@ -829,6 +834,7 @@ class Host(object):
             host_collection_performance_emit.disk_usage_io(data=data)
 
     def host_collection_performance_process_engine(self):
+        self.init_conn()
 
         while True:
             if Utils.exit_flag:

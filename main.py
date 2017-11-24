@@ -11,8 +11,9 @@ import os
 
 import time
 
-from models.event_process import EventProcess
 from models.initialize import logger, thread_status, config
+from models.event_process import EventProcess
+from models.event_loop import vir_event_loop_poll_register, vir_event_loop_poll_run
 from models import Host
 from models import Utils
 from models import PidFile
@@ -31,47 +32,46 @@ def main():
 
     threads = []
 
-    EventProcess.guest_event_register()
-
     signal.signal(signal.SIGTERM, Utils.signal_handle)
     signal.signal(signal.SIGINT, Utils.signal_handle)
 
     guest_creating_progress_report_engine_engine = Host()
-    guest_creating_progress_report_engine_engine.init_conn()
     t_ = threading.Thread(
         target=guest_creating_progress_report_engine_engine.guest_creating_progress_report_engine, args=())
     threads.append(t_)
 
     host_use_for_guest_operate_engine = Host()
-    host_use_for_guest_operate_engine.init_conn()
     t_ = threading.Thread(target=host_use_for_guest_operate_engine.guest_operate_engine, args=())
     threads.append(t_)
 
     host_use_for_host_state_report_engine = Host()
-    host_use_for_host_state_report_engine.init_conn()
     t_ = threading.Thread(target=host_use_for_host_state_report_engine.state_report_engine, args=())
     threads.append(t_)
 
     host_use_for_collection_performance_process_engine = Host()
-    host_use_for_collection_performance_process_engine.init_conn()
     t_ = threading.Thread(
         target=host_use_for_collection_performance_process_engine.collection_performance_process_engine,
         args=())
     threads.append(t_)
 
     host_use_for_host_collection_performance_process_engine = Host()
-    host_use_for_host_collection_performance_process_engine.init_conn()
     t_ = threading.Thread(
         target=
         host_use_for_host_collection_performance_process_engine.host_collection_performance_process_engine,
         args=())
     threads.append(t_)
 
+    vir_event_loop_poll_register()
+    t_ = threading.Thread(target=vir_event_loop_poll_run, name="libvirtEventLoop")
+    threads.append(t_)
+
     host_use_for_host_state_report_engine.refresh_guest_state()
 
     for t in threads:
-        t.setDaemon(config['daemon'])
+        t.setDaemon(True)
         t.start()
+
+    EventProcess.guest_event_register()
 
     while True:
         if Utils.exit_flag:
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     try:
 
         if config['daemon']:
-            with daemon.DaemonContext():
+            with daemon.DaemonContext(files_preserve=[logger.handlers[0].stream.fileno()]):
                 main()
 
         else:
