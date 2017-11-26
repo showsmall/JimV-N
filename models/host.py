@@ -103,7 +103,9 @@ class Host(object):
 
         while True:
             if Utils.exit_flag:
-                print 'Thread guest_operate_engine say bye-bye'
+                msg = 'Thread guest_operate_engine say bye-bye'
+                print msg
+                logger.info(msg=msg)
                 return
 
             thread_status['guest_operate_engine'] = ji.JITime.now_date_time()
@@ -111,9 +113,6 @@ class Host(object):
             # noinspection PyBroadException
             try:
                 msg = ps.get_message(timeout=1)
-
-                if config['DEBUG']:
-                    print 'guest_operate_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
                 if msg is None or 'data' not in msg or not isinstance(msg['data'], basestring):
                     continue
@@ -436,7 +435,9 @@ class Host(object):
 
         while True:
             if Utils.exit_flag:
-                print 'Thread guest_creating_progress_report_engine say bye-bye'
+                msg = 'Thread guest_creating_progress_report_engine say bye-bye'
+                print msg
+                logger.info(msg=msg)
                 return
 
             # noinspection PyBroadException
@@ -513,7 +514,7 @@ class Host(object):
     # 使用时，创建独立的实例来避开 多线程 的问题
     def state_report_engine(self):
         """
-        宿主机状态上报引擎
+        计算节点状态上报引擎
         """
         self.init_conn()
 
@@ -524,16 +525,15 @@ class Host(object):
 
         while True:
             if Utils.exit_flag:
-                print 'Thread state_report_engine say bye-bye'
+                msg = 'Thread state_report_engine say bye-bye'
+                print msg
+                logger.info(msg=msg)
                 return
 
             thread_status['state_report_engine'] = ji.JITime.now_date_time()
 
             # noinspection PyBroadException
             try:
-                if config['DEBUG']:
-                    print 'state_report_engine alive: ' + ji.JITime.gmt(ts=time.time())
-
                 time.sleep(2)
 
                 # 一分钟做一次更新
@@ -716,11 +716,10 @@ class Host(object):
 
         while True:
             if Utils.exit_flag:
-                print 'Thread collection_performance_process_engine say bye-bye'
+                msg = 'Thread collection_performance_process_engine say bye-bye'
+                print msg
+                logger.info(msg=msg)
                 return
-
-            if config['DEBUG']:
-                print 'collection_performance_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
             thread_status['collection_performance_process_engine'] = ji.JITime.now_date_time()
             time.sleep(1)
@@ -753,7 +752,6 @@ class Host(object):
                 self.disk_io_performance_report()
 
             except:
-                print traceback.format_exc()
                 logger.error(traceback.format_exc())
                 log_emit.error(traceback.format_exc())
 
@@ -844,11 +842,10 @@ class Host(object):
 
         while True:
             if Utils.exit_flag:
-                print 'Thread host_collection_performance_process_engine say bye-bye'
+                msg = 'Thread host_collection_performance_process_engine say bye-bye'
+                print msg
+                logger.info(msg=msg)
                 return
-
-            if config['DEBUG']:
-                print 'host_collection_performance_process_engine alive: ' + ji.JITime.gmt(ts=time.time())
 
             thread_status['host_collection_performance_process_engine'] = ji.JITime.now_date_time()
             time.sleep(1)
@@ -867,7 +864,6 @@ class Host(object):
                 self.host_disk_usage_io_performance_report()
 
             except:
-                print traceback.format_exc()
                 logger.error(traceback.format_exc())
                 log_emit.error(traceback.format_exc())
 

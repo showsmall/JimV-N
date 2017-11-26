@@ -79,14 +79,18 @@ def main():
             EventProcess.guest_event_deregister()
             break
 
-        print thread_status
+        if config['debug']:
+            print thread_status
+
         time.sleep(1)
 
     # 等待子线程结束
     for t in threads:
         t.join()
 
-    print 'Main say bye-bye!'
+    msg = 'Main say bye-bye!'
+    print msg
+    logger.info(msg=msg)
 
 
 if __name__ == '__main__':
