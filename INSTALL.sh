@@ -236,7 +236,7 @@ function display_summary_information() {
     echo "=== 信息汇总"
     echo "==========="
     echo
-    echo "现在可以通过命令 '/opt/JimV-N/startup.sh' 启动运行 JimV-C。"
+    echo "现在可以通过命令 '/opt/JimV-N/startup.sh' 启动运行 JimV-N。"
 }
 
 function deploy() {

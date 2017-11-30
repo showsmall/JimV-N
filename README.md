@@ -29,7 +29,7 @@
 > 在一台服务器上仅部署 JimV-N。使其成为 JimV 虚拟化环境的计算节点。
 
 ``` bash
-curl https://raw.githubusercontent.com/jamesiter/JimV-N/master/INSTALL.sh | bash -
+curl https://raw.githubusercontent.com/jamesiter/JimV-N/master/INSTALL.sh -o INSTALL.sh && bash INSTALL.sh --redis_host {x.x.x.x} --redis_password {password} --redis_port {port}
 ```
 
 ### [JimV-N 手动安装](docs/install.md)
