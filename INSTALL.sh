@@ -12,7 +12,7 @@
 export PYPI='https://mirrors.aliyun.com/pypi/simple/'
 export JIMVN_REPOSITORY_URL='https://raw.githubusercontent.com/jamesiter/JimV-N'
 export EDITION='master'
-export GLOBAL_CONFIG_KEY='global_config'
+export GLOBAL_CONFIG_KEY='H:GlobalConfig'
 export VM_NETWORK_KEY='vm_network'
 export VM_NETWORK_MANAGE_KEY='vm_manage_network'
 
