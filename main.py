@@ -79,7 +79,7 @@ def main():
             EventProcess.guest_event_deregister()
             break
 
-        if config['debug']:
+        if config['DEBUG']:
             print thread_status
 
         time.sleep(1)

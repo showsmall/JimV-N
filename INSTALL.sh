@@ -117,7 +117,7 @@ function check_precondition() {
 }
 
 function prepare() {
-    yum install python2-pip git net-tools -y
+    yum install python2-pip git net-tools gcc -y
     pip install --upgrade pip -i ${PYPI}
 
 }
