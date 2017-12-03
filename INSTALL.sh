@@ -122,6 +122,63 @@ function prepare() {
 
 }
 
+function custom_repository_origin() {
+    mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
+    mv /etc/yum.repos.d/epel.repo /etc/yum.repos.d/epel.repo.backup
+    mv /etc/yum.repos.d/epel-testing.repo /etc/yum.repos.d/epel-testing.repo.backup
+    curl -o /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
+    curl -o /etc/yum.repos.d/epel.repo http://mirrors.aliyun.com/repo/epel-7.repo
+    yum clean all
+    rm -rf /var/cache/yum
+    yum makecache
+}
+
+function clear_up_environment() {
+    yum remove alsa-utils gssproxy -y
+    systemctl stop cups
+    systemctl disable cups
+    systemctl stop avahi-daemon.socket avahi-daemon.service
+    systemctl disable avahi-daemon.socket avahi-daemon.service
+    systemctl stop gssproxy
+    systemctl disable gssproxy
+    systemctl stop rpcbind.socket
+    systemctl disable rpcbind.socket
+    systemctl stop ksmtuned
+    systemctl disable ksmtuned
+    systemctl stop smartd
+    systemctl disable smartd
+    systemctl stop abrtd
+    systemctl disable abrtd
+    systemctl stop ModemManager
+    systemctl disable ModemManager
+    systemctl stop atd
+    systemctl disable atd
+    systemctl stop libstoragemgmt
+    systemctl disable libstoragemgmt
+    systemctl stop packagekit
+    systemctl disable packagekit
+
+    systemctl stop postfix
+    systemctl disable postfix
+    systemctl stop firewalld
+    systemctl disable firewalld
+    systemctl stop NetworkManager
+    systemctl disable NetworkManager
+    service auditd stop
+    systemctl disable auditd.service
+    systemctl stop tuned
+    systemctl disable tuned
+    systemctl stop chronyd
+    systemctl disable chronyd
+
+    sed -i 's@SELINUX=enforcing@SELINUX=disabled@g' /etc/sysconfig/selinux
+    sed -i 's@SELINUX=enforcing@SELINUX=disabled@g' /etc/selinux/config
+    setenforce 0
+    sed -i 's@GRUB_TIMEOUT=5@GRUB_TIMEOUT=3@g' /etc/default/grub
+    sed -i 's@rhgb quiet@console=tty0 console=ttyS0,115200n8@g' /etc/default/grub
+    grub2-mkconfig -o /boot/grub2/grub.cfg
+}
+
 function install_libvirt() {
 
     # 安装 libvirt
@@ -236,11 +293,13 @@ function display_summary_information() {
     echo "=== 信息汇总"
     echo "==========="
     echo
-    echo "现在可以通过命令 '/opt/JimV-N/startup.sh' 启动运行 JimV-N。"
+    echo "现在可以通过命令 'cd /opt/JimV-N && ./startup.sh' 启动运行 JimV-N。"
 }
 
 function deploy() {
     check_precondition
+    custom_repository_origin
+    clear_up_environment
     prepare
     install_libvirt
     handle_ssh_client_config
