@@ -7,7 +7,7 @@
 - [项目描述](#项目描述)
 - [未来计划](#未来计划)
 - [安装](#安装)
-    - [JimV-N 一键安装](#jimv-n-一键安装)
+    - [JimV-N 快速安装](#jimv-n-快速安装)
     - [[JimV-N 手动安装](docs/install.md)](#jimv-n-手动安装)
 - [问题反馈](#问题反馈)
 - [项目成员](#项目成员)
@@ -25,11 +25,14 @@
 
 ## 安装
 
-### JimV-N 一键安装
+### JimV-N 快速安装
 > 在一台服务器上仅部署 JimV-N。使其成为 JimV 虚拟化环境的计算节点。
 
 ``` bash
-curl https://raw.githubusercontent.com/jamesiter/JimV-N/master/INSTALL.sh -o INSTALL.sh && bash INSTALL.sh --redis_host {x.x.x.x} --redis_password {password} --redis_port {port}
+# 避免各种意外的 ssh 断开
+yum install screen -y
+curl https://raw.githubusercontent.com/jamesiter/JimV-N/master/INSTALL.sh -o INSTALL.sh
+screen bash INSTALL.sh --redis_host {x.x.x.x} --redis_password {password} --redis_port {port}
 ```
 
 ### [JimV-N 手动安装](docs/install.md)

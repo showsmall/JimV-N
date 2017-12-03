@@ -13,10 +13,11 @@ export PYPI='https://mirrors.aliyun.com/pypi/simple/'
 export JIMVN_REPOSITORY_URL='https://raw.githubusercontent.com/jamesiter/JimV-N'
 export EDITION='master'
 export GLOBAL_CONFIG_KEY='H:GlobalConfig'
+export COMPUTE_NODES_HOSTNAME_KEY='S:ComputeNodesHostname'
 export VM_NETWORK_KEY='vm_network'
 export VM_NETWORK_MANAGE_KEY='vm_manage_network'
 
-ARGS=`getopt -o h --long redis_host:,redis_password:,redis_port:,help -n 'INSTALL.sh' -- "$@"`
+ARGS=`getopt -o h --long redis_host:,redis_password:,redis_port:,hostname:,help -n 'INSTALL.sh' -- "$@"`
 
 eval set -- "${ARGS}"
 
@@ -35,8 +36,12 @@ do
             export REDIS_PSWD=$2
             shift 2
             ;;
+        --hostname)
+            export HOST_NAME=$2
+            shift 2
+            ;;
         -h|--help)
-            echo 'INSTALL.sh [-h|--help] {--redis_host,--redis_password,--redis_port}'
+            echo 'INSTALL.sh [-h|--help] {--redis_host,--redis_password,--redis_port,--hostname}'
             exit 0
             ;;
         --)
@@ -86,6 +91,11 @@ function check_precondition() {
         export REDIS_PSWD=''
     fi
 
+    if [ ! ${HOST_NAME} ]; then
+        echo "你需要指定参数 '--hostname'"
+        exit 1
+    fi
+
     REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw ping`
 
     if [ ${REDIS_RESPONSE} != 'x_PONG' ]; then
@@ -114,6 +124,15 @@ function check_precondition() {
     else
         export VM_NETWORK_MANAGE=`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HGET ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_MANAGE_KEY}`
     fi
+
+    REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw SISMEMBER ${COMPUTE_NODES_HOSTNAME_KEY} ${HOST_NAME}`
+    if [ ${REDIS_RESPONSE} != 'x_0' ]; then
+        echo "计算节点 ${HOST_NAME} 已存在，请重新指定 --hostname 的值，或清除冲突的计算节点。"
+        exit 1
+    else
+        hostname ${HOST_NAME}
+        echo ${HOST_NAME} > /etc/hostname
+    fi
 }
 
 function prepare() {
@@ -134,49 +153,14 @@ function custom_repository_origin() {
 }
 
 function clear_up_environment() {
-    yum remove alsa-utils gssproxy -y
-    systemctl stop cups
-    systemctl disable cups
-    systemctl stop avahi-daemon.socket avahi-daemon.service
-    systemctl disable avahi-daemon.socket avahi-daemon.service
-    systemctl stop gssproxy
-    systemctl disable gssproxy
-    systemctl stop rpcbind.socket
-    systemctl disable rpcbind.socket
-    systemctl stop ksmtuned
-    systemctl disable ksmtuned
-    systemctl stop smartd
-    systemctl disable smartd
-    systemctl stop abrtd
-    systemctl disable abrtd
-    systemctl stop ModemManager
-    systemctl disable ModemManager
-    systemctl stop atd
-    systemctl disable atd
-    systemctl stop libstoragemgmt
-    systemctl disable libstoragemgmt
-    systemctl stop packagekit
-    systemctl disable packagekit
-
-    systemctl stop postfix
-    systemctl disable postfix
     systemctl stop firewalld
     systemctl disable firewalld
     systemctl stop NetworkManager
     systemctl disable NetworkManager
-    service auditd stop
-    systemctl disable auditd.service
-    systemctl stop tuned
-    systemctl disable tuned
-    systemctl stop chronyd
-    systemctl disable chronyd
 
     sed -i 's@SELINUX=enforcing@SELINUX=disabled@g' /etc/sysconfig/selinux
     sed -i 's@SELINUX=enforcing@SELINUX=disabled@g' /etc/selinux/config
     setenforce 0
-    sed -i 's@GRUB_TIMEOUT=5@GRUB_TIMEOUT=3@g' /etc/default/grub
-    sed -i 's@rhgb quiet@console=tty0 console=ttyS0,115200n8@g' /etc/default/grub
-    grub2-mkconfig -o /boot/grub2/grub.cfg
 }
 
 function install_libvirt() {

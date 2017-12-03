@@ -33,6 +33,7 @@ class Init(object):
         'instruction_channel': 'C:Instruction',
         'downstream_queue': 'Q:Downstream',
         'upstream_queue': 'Q:Upstream',
+        'compute_nodes_hostname_key': 'S:ComputeNodesHostname',
         'DEBUG': False,
         'daemon': True,
         'pidfile': '/run/jimv/jimvn.pid'
@@ -145,6 +146,7 @@ logger = Init.init_logger()
 
 r = Init.redis_init_conn()
 assert isinstance(r, redis.StrictRedis)
+r.sadd(config['compute_nodes_hostname_key'], ji.Common.get_hostname())
 q_creating_guest = Queue.Queue()
 
 host_cpu_count = multiprocessing.cpu_count()
