@@ -92,8 +92,7 @@ function check_precondition() {
     fi
 
     if [ ! ${HOST_NAME} ]; then
-        echo "你需要指定参数 '--hostname'"
-        exit 1
+        export HOST_NAME=`hostname`
     fi
 
     REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw ping`
@@ -225,7 +224,7 @@ EOF
 
 function create_network_bridge_in_libvirt() {
 
-cat > /etc/libvirt/qemu/networks/${VM_NETWORK}.xml << "EOF"
+cat > /etc/libvirt/qemu/networks/${VM_NETWORK}.xml << EOF
 <network>
     <uuid>the_uuid</uuid>
     <name>${VM_NETWORK}</name>
