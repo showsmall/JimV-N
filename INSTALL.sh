@@ -17,7 +17,8 @@ export COMPUTE_NODES_HOSTNAME_KEY='S:ComputeNodesHostname'
 export VM_NETWORK_KEY='vm_network'
 export VM_NETWORK_MANAGE_KEY='vm_manage_network'
 
-ARGS=`getopt -o h --long redis_host:,redis_password:,redis_port:,hostname:,help -n 'INSTALL.sh' -- "$@"`
+
+ARGS=`getopt -o h --long redis_host:,redis_password:,redis_port:,help -n 'INSTALL.sh' -- "$@"`
 
 eval set -- "${ARGS}"
 
@@ -36,12 +37,9 @@ do
             export REDIS_PSWD=$2
             shift 2
             ;;
-        --hostname)
-            export HOST_NAME=$2
-            shift 2
-            ;;
         -h|--help)
-            echo 'INSTALL.sh [-h|--help] {--redis_host,--redis_password,--redis_port,--hostname}'
+            echo 'INSTALL.sh [-h|--help] {--redis_host,--redis_password,--redis_port}'
+            echo '如果忘记了 redis_password, redis_port 信息，可以在 JimV-C 的 /etc/jimvn.conf 文件中获得。'
             exit 0
             ;;
         --)
@@ -72,6 +70,8 @@ function check_precondition() {
 
     yum install epel-release -y
     yum install redis -y
+    yum install python2-pip git net-tools bind-utils gcc -y
+    pip install --upgrade pip -i ${PYPI}
 
     if [ `egrep -c '(vmx|svm)' /proc/cpuinfo` -eq 0 ]; then
         echo "需要 CPU 支持 vmx 或 svm, 该 CPU 不支持。"
@@ -91,8 +91,17 @@ function check_precondition() {
         export REDIS_PSWD=''
     fi
 
-    if [ ! ${HOST_NAME} ]; then
-        export HOST_NAME=`hostname`
+    # 代替语句 ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'
+    export SERVER_IP=`hostname -I`
+    export SERVER_NETMASK=`ifconfig | grep ${SERVER_IP} | grep -Eo 'netmask ?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
+    export GATEWAY=`route -n | grep '^0.0.0.0' | awk '{ print $2; }'`
+    export DNS1=`nslookup 127.0.0.1 | grep Server | grep -Eo '([0-9]*\.){3}[0-9]*'`
+    export NIC=`ifconfig | grep ${SERVER_IP} -B 1 | head -1 | cut -d ':' -f 1`
+    export HOST_NAME=`grep ${SERVER_IP} /etc/hosts | awk '{ print $2; }'`
+
+    if [ 'x_'${HOST_NAME} = 'x_' ]; then
+        echo "计算节点 IP 地址未在 /etc/hosts 文件中被发现。请完整安装、初始化 JimV-C 后，再安装 JimV-N。"
+        exit 1
     fi
 
     REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw ping`
@@ -134,10 +143,10 @@ function check_precondition() {
     fi
 }
 
-function prepare() {
-    yum install python2-pip git net-tools gcc -y
-    pip install --upgrade pip -i ${PYPI}
-
+function set_ntp() {
+    timedatectl set-timezone Asia/Shanghai
+    timedatectl set-ntp true
+    timedatectl status
 }
 
 function custom_repository_origin() {
@@ -163,7 +172,6 @@ function clear_up_environment() {
 }
 
 function install_libvirt() {
-
     # 安装 libvirt
     yum install libvirt libvirt-devel python-devel libguestfs -y
     yum install libguestfs libguestfs-{devel,tools,xfs,winsupport,rescue} python-libguestfs -y
@@ -175,13 +183,6 @@ function handle_ssh_client_config() {
 }
 
 function handle_net_bonding_bridge() {
-    # 代替语句 ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'
-    export SERVER_IP=`hostname -I`
-    export SERVER_NETMASK=`ifconfig | grep ${SERVER_IP} | grep -Eo 'netmask ?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
-    export GATEWAY=`route -n | grep '^0.0.0.0' | awk '{ print $2; }'`
-    export DNS1=`nslookup 127.0.0.1 | grep Server | grep -Eo '([0-9]*\.){3}[0-9]*'`
-    export NIC=`ifconfig | grep ${SERVER_IP} -B 1 | head -1 | cut -d ':' -f 1`
-
     # 参考地址: https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/7/html/networking_guide/
 cat > /etc/sysconfig/network-scripts/ifcfg-${VM_NETWORK} << EOF
 DEVICE=${VM_NETWORK}
@@ -281,9 +282,9 @@ function display_summary_information() {
 
 function deploy() {
     check_precondition
+    set_ntp
     custom_repository_origin
     clear_up_environment
-    prepare
     install_libvirt
     handle_ssh_client_config
     handle_net_bonding_bridge

@@ -1,139 +1,174 @@
 # 手动安装
 
+
 [TOC]: # "手动安装"
 
 # 手动安装
-- [克隆 JimV-N 项目](#克隆-jimv-n-项目)
-- [基础设施建设](#基础设施建设)
-- [服务器间实现SSH-KEY互通(为热迁移做铺垫)](#服务器间实现ssh-key互通为热迁移做铺垫)
+- [[安装、初始化 JimV-C](https://github.com/jamesiter/JimV-C#%E5%AE%89%E8%A3%85)](#安装初始化-jimv-c)
+- [开启 NTP 同步](#开启-ntp-同步)
+- [安装必要软件](#安装必要软件)
+- [声明全局变量](#声明全局变量)
+- [环境检测](#环境检测)
+- [整理环境](#整理环境)
+- [安装 Libvirt](#安装-libvirt)
 - [为虚拟化配置`绑定+桥接`的网络环境](#为虚拟化配置绑定桥接的网络环境)
 - [Libvirtd 中定义新网桥](#libvirtd-中定义新网桥)
-- [启动虚拟化网络](#启动虚拟化网络)
-- [启动服务](#启动服务)
+- [启动 Libvirtd 服务](#启动-libvirtd-服务)
+- [克隆、签出 JimV-N 项目](#克隆签出-jimv-n-项目)
 - [修改配置文件](#修改配置文件)
-- [启动服务](#启动服务)
+- [启动 JimV-N 服务](#启动-jimv-n-服务)
 
 
-## 克隆 JimV-N 项目
+## [安装、初始化 JimV-C](https://github.com/jamesiter/JimV-C#%E5%AE%89%E8%A3%85)
+
+
+## 开启 NTP 同步
 
 ``` bash
-git clone https://github.com/jamesiter/JimV-N.git /opt/JimV-N
+timedatectl set-timezone Asia/Shanghai
+timedatectl set-ntp true
+timedatectl status
 ```
 
-## 基础设施建设
 
-`Gentoo`
-
-``` bash
-HOSTNAME='1k01.jimv.io'; echo hostname=\""$HOSTNAME"\" > /etc/conf.d/hostname; hostname $HOSTNAME; unset HOSTNAME
-# 安装 Qemu
-USE="aio caps curl fdt filecaps jpeg ncurses nls pin-upstream-blobs png seccomp threads uuid vhost-net vnc xattr iscsi nfs spice ssh virtfs xfs" emerge app-emulation/qemu
-
-# 安装 Libvirtd
-USE="caps libvirtd macvtap nls qemu udev vepa iscsi nfs virt-network" emerge app-emulation/libvirt
-
-ACCEPT_KEYWORDS=~amd64 USE="python" emerge libguestfs
- 
-# 安装 JimV-N 所需扩展库
-pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
-pip install -r /opt/JimV-N/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
-```
-
-`CentOS`
+## 安装必要软件
 
 ``` bash
-HOSTNAME='1k01.jimv.io'; echo $HOSTNAME > /etc/hostname; hostname $HOSTNAME; unset HOSTNAME
 yum install epel-release -y
-yum install python2-pip git net-tools -y
+yum install redis -y
+yum install python2-pip git net-tools bind-utils gcc -y
+```
+
+
+## 声明全局变量
+
+``` bash
+export PYPI='https://mirrors.aliyun.com/pypi/simple/'
+export JIMVN_REPOSITORY_URL='https://raw.githubusercontent.com/jamesiter/JimV-N'
+export EDITION='master'
+export GLOBAL_CONFIG_KEY='H:GlobalConfig'
+export COMPUTE_NODES_HOSTNAME_KEY='S:ComputeNodesHostname'
+export VM_NETWORK_KEY='vm_network'
+export VM_NETWORK_MANAGE_KEY='vm_manage_network'
+
+# 代替语句 ifconfig | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.0.0.1'
+export SERVER_IP=`hostname -I`
+export SERVER_NETMASK=`ifconfig | grep ${SERVER_IP} | grep -Eo 'netmask ?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*'`
+export GATEWAY=`route -n | grep '^0.0.0.0' | awk '{ print $2; }'`
+export DNS1=`nslookup 127.0.0.1 | grep Server | grep -Eo '([0-9]*\.){3}[0-9]*'`
+export NIC=`ifconfig | grep ${SERVER_IP} -B 1 | head -1 | cut -d ':' -f 1`
+export HOST_NAME=`grep ${SERVER_IP} /etc/hosts | awk '{ print $2; }'`
+export REDIS_HOST=`hostname`
+export REDIS_PORT='6379'
+export REDIS_PSWD=''
+
+if [ ! ${REDIS_HOST} ] || [ ${#REDIS_HOST} -eq 0 ]; then
+    echo "你需要指定参数 REDIS_HOST"
+fi
+```
+
+
+## 环境检测
+
+``` bash
+if [ `egrep -c '(vmx|svm)' /proc/cpuinfo` -eq 0 ]; then
+    echo "需要 CPU 支持 vmx 或 svm, 该 CPU 不支持。"
+fi
+if [ 'x_'${HOST_NAME} = 'x_' ]; then
+    echo "计算节点 IP 地址未在 /etc/hosts 文件中被发现。请完整安装、初始化 JimV-C 后，再安装 JimV-N。"
+fi
+
+REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw ping`
+
+if [ ${REDIS_RESPONSE} != 'x_PONG' ]; then
+    echo "Redis 连接失败，请检查全局变量 REDIS_HOST, REDIS_PSWD, REDIS_PORT 是否正确声明。"
+fi
+
+REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw EXISTS ${GLOBAL_CONFIG_KEY}`
+if [ ${REDIS_RESPONSE} = 'x_0' ]; then
+    echo "安装 JimV-N 之前，你需要先初始化 JimV-C。"
+fi
+
+REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HEXISTS ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_KEY}`
+if [ ${REDIS_RESPONSE} = 'x_0' ]; then
+    echo "未在 JimV-C 的配置中发现 key ${VM_NETWORK_KEY}，请重新配置 JimV-C。"
+else
+    export VM_NETWORK=`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HGET ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_KEY}`
+fi
+
+REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HEXISTS ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_MANAGE_KEY}`
+if [ ${REDIS_RESPONSE} = 'x_0' ]; then
+    echo "未在 JimV-C 的配置中发现 key ${VM_NETWORK_MANAGE_KEY}，请重新配置 JimV-C。"
+else
+    export VM_NETWORK_MANAGE=`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw HGET ${GLOBAL_CONFIG_KEY} ${VM_NETWORK_MANAGE_KEY}`
+fi
+
+REDIS_RESPONSE='x_'`redis-cli -h ${REDIS_HOST} -a ${REDIS_PSWD} -p ${REDIS_PORT} --raw SISMEMBER ${COMPUTE_NODES_HOSTNAME_KEY} ${HOST_NAME}`
+if [ ${REDIS_RESPONSE} != 'x_0' ]; then
+    echo "计算节点 ${HOST_NAME} 已存在，请清除冲突的计算节点。"
+else
+    hostname ${HOST_NAME}
+    echo ${HOST_NAME} > /etc/hostname
+fi
+```
+
+
+## 整理环境
+
+``` bash
+systemctl stop firewalld
+systemctl disable firewalld
+systemctl stop NetworkManager
+systemctl disable NetworkManager
+
+sed -i 's@SELINUX=enforcing@SELINUX=disabled@g' /etc/sysconfig/selinux
+sed -i 's@SELINUX=enforcing@SELINUX=disabled@g' /etc/selinux/config
+setenforce 0
+```
+
+
+## 安装 Libvirt
+
+``` bash
 yum install libvirt libvirt-devel python-devel libguestfs -y
 yum install libguestfs libguestfs-{devel,tools,xfs,winsupport,rescue} python-libguestfs -y
-pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple/
-pip install -r /opt/JimV-N/requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
 
-## 服务器间实现SSH-KEY互通(为热迁移做铺垫)
-
-``` bash
-# 关闭 SSH 服务器端 Key 校验
-sed -i 's@.*StrictHostKeyChecking.*@StrictHostKeyChecking no@' /etc/ssh/ssh_config
-
-# 生成空密码的SSH使用的密钥对
-# 一路回车
-ssh-keygen
-
-# 分发公钥到集群中的其它计算节点上(便于迁移)
-# 对所有目标主机(包括自身)
-ssh-copy-id [*].jimv.io
-
-# 复制私钥到集群中的其它计算节点上
-DHOST=[*].jimvn.jimv; scp ~/.ssh/id_rsa $DHOST:~/.ssh/id_rsa; ssh $DHOST 'chmod 0400 ~/.ssh/id_rsa'; unse
-t DHOST
-```
 
 ## 为虚拟化配置`绑定+桥接`的网络环境
 
-`Gentoo`
-
-``` bash
-# 安装虚拟网络环境所需工具
-# net-misc/ifenslave            系统网络接口绑定工具
-# net-misc/bridge-utils         brctl 以太网桥接工具
-# sys-apps/usermode-utilities   tunctl TUN/TAP 设备创建&管理工具
-emerge net-misc/ifenslave net-misc/bridge-utils sys-apps/usermode-utilities
-
-# 虚拟网络环境配置
-# 参考地址: https://wiki.gentoo.org/wiki/Handbook:X86/Full/Networking#Bonding
-cat > /etc/conf.d/net << "EOF"
-config_eno1="null"
-config_eno2="null"
-
-slaves_bond0="eno1 eno2"
-config_bond0="null"
-# Pick a correct mode and additional configuration options which suit your needs
-mode_bond0="balance-alb"
-rc_need_bond0="net.eno1 net.eno2"
-
-brctl_br0="stp off"
-bridge_br0="bond0"
-config_br0="10.10.0.1/20"
-routes_br0="default via 10.10.0.254"
-rc_need_br0="net.bond0"
-EOF
-```
-
-`CentOS`
-
 ``` bash
 # 参考地址: https://access.redhat.com/documentation/zh-cn/red_hat_enterprise_linux/7/html/networking_guide/
-cat > /etc/sysconfig/network-scripts/ifcfg-br0 << "EOF"
-DEVICE=br0
-NAME=br0
+cat > /etc/sysconfig/network-scripts/ifcfg-${VM_NETWORK} << EOF
+DEVICE=${VM_NETWORK}
+NAME=${VM_NETWORK}
 TYPE=Bridge
 BOOTPROTO=static
 ONBOOT=yes
 DELAY=0
-IPADDR=10.10.0.1
-NETMASK=255.255.240.0
-GATEWAY=10.10.0.254
-DNS1=223.5.5.5
+IPADDR=${SERVER_IP}
+NETMASK=${SERVER_NETMASK}
+GATEWAY=${GATEWAY}
+DNS1=${DNS1}
 DNS2=8.8.8.8
 IPV6INIT=no
 EOF
 
-cat > /etc/sysconfig/network-scripts/ifcfg-bond0 << "EOF"
+cat > /etc/sysconfig/network-scripts/ifcfg-bond0 << EOF
 DEVICE=bond0
 NAME=bond0
 TYPE=Bond
-BRIDGE=br0
+BRIDGE=${VM_NETWORK}
 BONDING_MASTER=yes
 ONBOOT=yes
 BOOTPROTO=none
 BONDING_OPTS="mode=balance-alb xmit_hash_policy=layer3+4"
 EOF
 
-cat > /etc/sysconfig/network-scripts/ifcfg-eth0 << "EOF"
-DEVICE=eth0
-NAME=eth0
+# 如果有多个物理接口，其它接口配置与其类似，照猫画虎即可。
+cat > /etc/sysconfig/network-scripts/ifcfg-${NIC} << EOF
+DEVICE=${NIC}
+NAME=${NIC}
 TYPE=Ethernet
 BOOTPROTO=none
 ONBOOT=yes
@@ -141,69 +176,35 @@ MASTER=bond0
 SLAVE=yes
 EOF
 
-cat > /etc/sysconfig/network-scripts/ifcfg-eth1 << "EOF"
-DEVICE=eth1
-NAME=eth1
-TYPE=Ethernet
-BOOTPROTO=none
-ONBOOT=yes
-MASTER=bond0
-SLAVE=yes
-EOF
+# 重启网络使之生效
+/etc/init.d/network restart
 ```
+
 
 ## Libvirtd 中定义新网桥
 
 ``` bash
-cat > /etc/libvirt/qemu/networks/net-br0.xml << "EOF"
+cat > /etc/libvirt/qemu/networks/${VM_NETWORK}.xml << EOF
 <network>
     <uuid>the_uuid</uuid>
-    <name>net-br0</name>
+    <name>${VM_NETWORK}</name>
     <forward mode="bridge"/>
-    <bridge name="br0"/>
+    <bridge name="${VM_NETWORK}"/>
 </network>
 EOF
-sed -i "s@the_uuid@`uuidgen`@" /etc/libvirt/qemu/networks/net-br0.xml
+
+sed -i "s@the_uuid@`uuidgen`@" /etc/libvirt/qemu/networks/${VM_NETWORK}.xml
 
 # 去除默认的 default 网络定义
 rm -f /etc/libvirt/qemu/networks/default.xml /etc/libvirt/qemu/networks/autostart/default.xml
 
 # 使其随服务自动创建
 cd /etc/libvirt/qemu/networks/autostart/
-ln -s ../net-br0.xml net-br0.xml
+ln -s ../${VM_NETWORK}.xml ${VM_NETWORK}.xml
 ```
 
-## 启动虚拟化网络
 
-`Gentoo`
-
-``` bash
-ln -s /etc/init.d/net.lo /etc/init.d/net.eno1
-ln -s /etc/init.d/net.lo /etc/init.d/net.eno2
-ln -s /etc/init.d/net.lo /etc/init.d/net.bond1
-ln -s /etc/init.d/net.lo /etc/init.d/net.br0
-rc-update add net.br0 default
-/etc/init.d/net.br0 start
-```
-
-`CentOS`
-
-``` bash
-/etc/init.d/network restart
-```
-
-## 启动服务
-
-`Gentoo`
-
-``` bash
-rc-update del dnsmasq
-rc-update add libvirtd
-/etc/init.d/libvirtd start
-virsh net-destroy default && virsh net-undefine default
-```
-
-`CentOS`
+## 启动 Libvirtd 服务
 
 ``` bash
 systemctl stop dnsmasq
@@ -213,12 +214,31 @@ systemctl start libvirtd
 virsh net-destroy default && virsh net-undefine default
 ```
 
+
+## 克隆、签出 JimV-N 项目
+
+``` bash
+# 更新到最新版本 pip
+pip install --upgrade pip -i ${PYPI}
+
+# 克隆并签出目标版本的 JimV-N
+git clone https://github.com/jamesiter/JimV-N.git /opt/JimV-N
+
+# 安装 JimV-N 所需扩展库
+pip install -r /opt/JimV-N/requirements.txt -i ${PYPI}
+```
+
+
 ## 修改配置文件
 
 配置文件的默认读取路径：`/etc/jimvn.conf`
 ``` bash
-cp /opt/JimV-N/jimvn.conf /etc/jimvn.conf
+cp -v /opt/JimV-N/jimvn.conf /etc/jimvn.conf
+sed -i "s/\"redis_host\".*$/\"redis_host\": \"${REDIS_HOST}\",/" /etc/jimvn.conf
+sed -i "s/\"redis_password\".*$/\"redis_password\": \"${REDIS_PSWD}\",/" /etc/jimvn.conf
+sed -i "s/\"redis_port\".*$/\"redis_port\": \"${REDIS_PORT}\",/" /etc/jimvn.conf
 ```
+
 **提示：**
 > 下表中凸显的配置项，需要用户根据自己的环境手动修改。
 
@@ -228,14 +248,15 @@ cp /opt/JimV-N/jimvn.conf /etc/jimvn.conf
 | **`redis_port`**     | 6379                    | Redis 数据库端口   |
 | **`redis_password`** |                         | Redis 数据库密码   |
 | redis_dbid           | 0                       | 选择的 Redis 数据库 |
-| DEBUG                | false                   | 调试模式           |
+| DEBUG                | false                   | 调试模式。区分大小写 |
+| daemon               | false                   | 守护进程模式        |
 | log_file_path        | /var/log/jimv/jimvn.log | 日志文件存放目录    |
 
 
-## 启动服务
+## 启动 JimV-N 服务
 
 ``` bash
 # 启动 JimV-N
-/opt/JimV-N/startup.sh
+cd /opt/JimV-N && ./startup.sh
 ```
 
