@@ -35,6 +35,8 @@ def main():
     signal.signal(signal.SIGTERM, Utils.signal_handle)
     signal.signal(signal.SIGINT, Utils.signal_handle)
 
+    Host.init_guestfish()
+
     guest_creating_progress_report_engine_engine = Host()
     t_ = threading.Thread(
         target=guest_creating_progress_report_engine_engine.guest_creating_progress_report_engine, args=())
@@ -65,7 +67,9 @@ def main():
     t_ = threading.Thread(target=vir_event_loop_poll_run, name="libvirtEventLoop")
     threads.append(t_)
 
-    host_use_for_host_state_report_engine.refresh_guest_state()
+    host_use_for_refresh_guest_state_engine = Host()
+    t_ = threading.Thread(target=host_use_for_refresh_guest_state_engine.refresh_guest_state, args=())
+    threads.append(t_)
 
     for t in threads:
         t.setDaemon(True)

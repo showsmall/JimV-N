@@ -7,6 +7,8 @@ import sys
 import time
 import traceback
 import Queue
+
+import guestfs
 import redis
 
 import libvirt
@@ -551,11 +553,20 @@ class Host(object):
                 log_emit.error(traceback.format_exc())
 
     def refresh_guest_state(self):
-        self.init_conn()
-        self.refresh_guest_mapping()
+        try:
+            self.init_conn()
 
-        for guest in self.guest_mapping_by_uuid.values():
-            Guest.guest_state_report(guest)
+            while True:
+                self.refresh_guest_mapping()
+
+                for guest in self.guest_mapping_by_uuid.values():
+                    Guest.guest_state_report(guest)
+
+                time.sleep(10)
+
+        except:
+            logger.error(traceback.format_exc())
+            log_emit.error(traceback.format_exc())
 
     def cpu_memory_performance_report(self):
 
@@ -866,4 +877,10 @@ class Host(object):
             except:
                 logger.error(traceback.format_exc())
                 log_emit.error(traceback.format_exc())
+
+    @staticmethod
+    def init_guestfish():
+        g = guestfs.GuestFS(python_return_dict=True)
+        g.launch()
+        g.shutdown()
 
