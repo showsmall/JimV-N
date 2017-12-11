@@ -9,6 +9,9 @@ import errno
 import time
 import threading
 
+from models import Utils
+from models.initialize import logger
+
 
 __author__ = 'James Iter'
 __date__ = '2017/6/14'
@@ -95,7 +98,6 @@ class VirEventLoopPoll(object):
         self.handles = []
         self.timers = []
         self.cleanup = []
-        self.quit = False
 
         # The event loop can be used from multiple threads at once.
         # Specifically while the main thread is sleeping in poll()
@@ -214,8 +216,13 @@ class VirEventLoopPoll(object):
 
     # Actually run the event loop forever
     def run_loop(self):
-        self.quit = False
-        while not self.quit:
+        while True:
+            if Utils.exit_flag:
+                msg = 'Thread vir_event_loop_poll_run say bye-bye'
+                print msg
+                logger.info(msg=msg)
+                return
+
             self.run_once()
 
     def interrupt(self):

@@ -19,7 +19,7 @@ import uuid
 
 import psutil
 import paramiko
-import thread
+import threading
 
 from jimvn_exception import ConnFailed
 
@@ -156,19 +156,21 @@ class Host(object):
                                 logger.debug(_log)
                                 log_emit.debug(_log)
 
-                            raise
+                            raise RuntimeError('The uuid ' + msg['uuid'] + ' not found in current domains list.')
 
                         self.guest = self.guest_mapping_by_uuid[msg['uuid']]
                         if not isinstance(self.guest, libvirt.virDomain):
-                            raise
+                            raise RuntimeError('Guest ' + msg['uuid'] + ' is not a domain.')
 
                     if msg['action'] == 'create':
-                        thread.start_new_thread(Guest.create, (self.conn, msg))
+                        t = threading.Thread(target=Guest.create, args=(self.conn, msg))
+                        t.setDaemon(False)
+                        t.start()
                         continue
 
                     elif msg['action'] == 'reboot':
                         if self.guest.reboot() != 0:
-                            raise
+                            raise RuntimeError('Guest reboot failure.')
 
                     elif msg['action'] == 'force_reboot':
                         self.guest.destroy()
@@ -176,11 +178,11 @@ class Host(object):
 
                     elif msg['action'] == 'shutdown':
                         if self.guest.shutdown() != 0:
-                            raise
+                            raise RuntimeError('Guest shutdown failure.')
 
                     elif msg['action'] == 'force_shutdown':
                         if self.guest.destroy() != 0:
-                            raise
+                            raise RuntimeError('Guest force shutdown failure.')
 
                     elif msg['action'] == 'boot':
                         if not self.guest.isActive():
@@ -189,15 +191,15 @@ class Host(object):
                             guest.execute_boot_jobs(guest=self.guest, boot_jobs=msg['boot_jobs'])
 
                             if self.guest.create() != 0:
-                                raise
+                                raise RuntimeError('Guest boot failure.')
 
                     elif msg['action'] == 'suspend':
                         if self.guest.suspend() != 0:
-                            raise
+                            raise RuntimeError('Guest suspend failure.')
 
                     elif msg['action'] == 'resume':
                         if self.guest.resume() != 0:
-                            raise
+                            raise RuntimeError('Guest resume failure.')
 
                     elif msg['action'] == 'delete':
                         root = ET.fromstring(self.guest.XMLDesc())
@@ -245,7 +247,7 @@ class Host(object):
 
                         # 添加磁盘成功返回时，ret值为0。可参考 Linux 命令返回值规范？
                         if self.guest.attachDeviceFlags(xml=msg['xml'], flags=flags) != 0:
-                            raise
+                            raise RuntimeError('Attack disk failure.')
 
                     elif msg['action'] == 'detach_disk':
 
@@ -258,7 +260,7 @@ class Host(object):
                             flags |= libvirt.VIR_DOMAIN_AFFECT_LIVE
 
                         if self.guest.detachDeviceFlags(xml=msg['xml'], flags=flags) != 0:
-                            raise
+                            raise RuntimeError('Detach disk failure.')
 
                     elif msg['action'] == 'migrate':
 
@@ -286,7 +288,7 @@ class Host(object):
                                 _log = u'非共享存储不支持离线迁移。'
                                 logger.error(_log)
                                 log_emit.error(_log)
-                                raise
+                                raise RuntimeError('Nonsupport online migrate with storage of non sharing mode.')
 
                             if self.init_ssh_client(hostname=msg['duri'].split('/')[2], user='root'):
                                 for _disk in root.findall('devices/disk'):
@@ -321,7 +323,7 @@ class Host(object):
                                         os.remove(_file_path)
 
                         else:
-                            raise
+                            raise RuntimeError('Unknown storage mode.')
 
                 elif msg['_object'] == 'disk':
                     if msg['action'] == 'create':
@@ -332,11 +334,11 @@ class Host(object):
 
                             if not Disk.make_qemu_image_by_glusterfs(gf=Guest.gf, dfs_volume=msg['dfs_volume'],
                                                                      image_path=msg['image_path'], size=msg['size']):
-                                raise
+                                raise RuntimeError('Create disk failure with glusterfs.')
 
                         elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                             if not Disk.make_qemu_image_by_local(image_path=msg['image_path'], size=msg['size']):
-                                raise
+                                raise RuntimeError('Create disk failure with local storage mode.')
 
                     elif msg['action'] == 'delete':
 
@@ -346,11 +348,11 @@ class Host(object):
 
                             if Disk.delete_qemu_image_by_glusterfs(gf=Guest.gf, image_path=msg['image_path']) \
                                     is not None:
-                                raise
+                                raise RuntimeError('Delete disk failure with glusterfs.')
 
                         elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                             if Disk.delete_qemu_image_by_local(image_path=msg['image_path']) is not None:
-                                raise
+                                raise RuntimeError('Delete disk failure with local storage mode.')
 
                     elif msg['action'] == 'resize':
 
@@ -373,11 +375,12 @@ class Host(object):
                                     logger.debug(_log)
                                     log_emit.debug(_log)
 
-                                raise
+                                raise RuntimeError('Resize disk failure, because the uuid ' + msg['guest_uuid'] +
+                                                   ' not found in current domains.')
 
                             self.guest = self.guest_mapping_by_uuid[msg['guest_uuid']]
                             if not isinstance(self.guest, libvirt.virDomain):
-                                raise
+                                raise RuntimeError('Resize disk failure, because the guest is not a domain.')
 
                         # 在线磁盘扩容
                         if used and self.guest.isActive():
@@ -389,7 +392,7 @@ class Host(object):
                                 msg['size'] = int(msg['size']) * 1024 * 1024
 
                                 if self.guest.blockResize(disk=msg['device_node'], size=msg['size']) != 0:
-                                    raise
+                                    raise RuntimeError('Online resize disk failure in blockResize method.')
 
                         # 离线磁盘扩容
                         else:
@@ -401,11 +404,11 @@ class Host(object):
                                 if not Disk.resize_qemu_image_by_glusterfs(dfs_volume=msg['dfs_volume'],
                                                                            image_path=msg['image_path'],
                                                                            size=msg['size']):
-                                    raise
+                                    raise RuntimeError('Offline resize disk failure with glusterfs.')
 
                             elif msg['storage_mode'] in [StorageMode.local.value, StorageMode.shared_mount.value]:
                                 if not Disk.resize_qemu_image_by_local(image_path=msg['image_path'], size=msg['size']):
-                                    raise
+                                    raise RuntimeError('Offline resize disk failure with local storage mode.')
 
                 else:
                     _log = u'未支持的 _object：' + msg['_object']
@@ -555,14 +558,10 @@ class Host(object):
     def refresh_guest_state(self):
         try:
             self.init_conn()
+            self.refresh_guest_mapping()
 
-            while True:
-                self.refresh_guest_mapping()
-
-                for guest in self.guest_mapping_by_uuid.values():
-                    Guest.guest_state_report(guest)
-
-                time.sleep(10)
+            for guest in self.guest_mapping_by_uuid.values():
+                Guest.guest_state_report(guest)
 
         except:
             logger.error(traceback.format_exc())

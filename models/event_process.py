@@ -4,8 +4,7 @@
 
 import libvirt
 
-from models.event_loop import vir_event_loop_poll_start
-from models.initialize import guest_event_emit, logger
+from models.initialize import guest_event_emit
 from models import Guest
 
 

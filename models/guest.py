@@ -96,13 +96,13 @@ class Guest(object):
             shutil.copyfile(self.template_path, self.system_image_path)
 
         else:
-            raise
+            raise ValueError('Unknown value of storage_mode.')
 
         return True
 
     def execute_boot_jobs(self, guest=None, boot_jobs=None, os_type=None):
         if not isinstance(boot_jobs, list):
-            raise
+            raise ValueError('The boot_jobs must be a list.')
 
         if boot_jobs.__len__() < 1:
             return True
@@ -278,10 +278,10 @@ class Guest(object):
             })
 
             if not guest.generate_system_image():
-                raise
+                raise RuntimeError('System image generate failure.')
 
             if not guest.define_by_xml(conn=conn):
-                raise
+                raise RuntimeError('Define the instance of virtual machine by xml failure.')
 
             guest_event_emit.creating(uuid=guest.uuid, progress=92)
 
@@ -304,7 +304,7 @@ class Guest(object):
             guest_event_emit.creating(uuid=guest.uuid, progress=97)
 
             if not guest.start_by_uuid(conn=conn):
-                raise
+                raise RuntimeError('Start the instance of virtual machine by uuid failure.')
 
             response_emit.success(_object=msg['_object'], action=msg['action'], uuid=msg['uuid'],
                                   data=extend_data, passback_parameters=msg.get('passback_parameters'))

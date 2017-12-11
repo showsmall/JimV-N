@@ -68,8 +68,7 @@ def main():
     threads.append(t_)
 
     host_use_for_refresh_guest_state_engine = Host()
-    t_ = threading.Thread(target=host_use_for_refresh_guest_state_engine.refresh_guest_state, args=())
-    threads.append(t_)
+    host_use_for_refresh_guest_state_engine.refresh_guest_state()
 
     for t in threads:
         t.setDaemon(True)
